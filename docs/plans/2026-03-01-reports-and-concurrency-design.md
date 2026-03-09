@@ -12,7 +12,7 @@
 
 ### Feature 1: Auto Markdown Report (all commands)
 
-**Filename format:** `anam-prep-{command}-{YYYYMMDD-HHMMSS}.md`
+**Filename format:** `kb-prep-{command}-{YYYYMMDD-HHMMSS}.md`
 
 **CLI changes:**
 - All 4 commands (`score`, `analyze`, `fix`, `upload`) auto-generate a timestamped markdown report in the current working directory.

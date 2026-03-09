@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "anam-prep"
+name = "kb-prep"
 version = "0.1.0"
 description = "Prepare, score, fix, and upload documents to anam.ai knowledge base for RAG-powered AI personas"
 readme = "README.md"
@@ -41,12 +41,12 @@ dev = [
 ]
 
 [project.scripts]
-anam-prep = "cli:cli"
+kb-prep = "cli:cli"
 
 [project.urls]
-Homepage = "https://github.com/jonathan-major/anam-prep"
-Repository = "https://github.com/jonathan-major/anam-prep"
-Issues = "https://github.com/jonathan-major/anam-prep/issues"
+Homepage = "https://github.com/Agentic-Studio-Labs/kb-prep"
+Repository = "https://github.com/Agentic-Studio-Labs/kb-prep"
+Issues = "https://github.com/Agentic-Studio-Labs/kb-prep/issues"
 
 [tool.ruff]
 target-version = "py310"

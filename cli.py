@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""anam-prep — Document preparation and upload CLI for anam.ai RAG.
+"""kb-prep — Document preparation and upload CLI for anam.ai RAG.
 
 Usage:
-    anam-prep score   <path>                          Score documents for RAG readiness
-    anam-prep analyze <path> --llm-key KEY            Score + LLM content analysis
-    anam-prep fix     <path> --llm-key KEY            Score + analyze + auto-fix issues
-    anam-prep upload  <path> --api-key KEY            Full pipeline: fix → recommend → upload
+    kb-prep score   <path>                          Score documents for RAG readiness
+    kb-prep analyze <path> --llm-key KEY            Score + LLM content analysis
+    kb-prep fix     <path> --llm-key KEY            Score + analyze + auto-fix issues
+    kb-prep upload  <path> --api-key KEY            Full pipeline: fix → recommend → upload
 
 All commands auto-generate a timestamped Markdown report (suppress with --no-report).
 LLM commands support --concurrency N (default: 5) for parallel API calls.
@@ -38,7 +38,7 @@ console = Console()
 # ---------------------------------------------------------------------------
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="anam-prep")
+@click.version_option(version="0.1.0", prog_name="kb-prep")
 def cli():
     """Prepare and upload documents to anam.ai knowledge base."""
     pass
@@ -356,7 +356,7 @@ def fix(path: str, llm_key: str, model: str, output: str, min_score: float, excl
 
     # --- Report inside output folder ---
     if not no_report:
-        report_name = f"anam-prep-fix-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+        report_name = f"kb-prep-fix-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
         report_path = os.path.join(output, report_name)
         _write_report_file(report_path, [
             _report_header("fix", len(docs)),
@@ -801,17 +801,17 @@ def _severity_color(severity: Severity) -> str:
 # ---------------------------------------------------------------------------
 
 def _generate_report_path(command: str) -> str:
-    """Return a timestamped report filename: anam-prep-{command}-{YYYYMMDD-HHMMSS}.md"""
+    """Return a timestamped report filename: kb-prep-{command}-{YYYYMMDD-HHMMSS}.md"""
     from datetime import datetime
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return f"anam-prep-{command}-{ts}.md"
+    return f"kb-prep-{command}-{ts}.md"
 
 
 def _report_header(command: str, file_count: int) -> list[str]:
     """Markdown header with command name, timestamp, and file count."""
     from datetime import datetime
     lines: list[str] = []
-    lines.append(f"# anam-prep {command} Report")
+    lines.append(f"# kb-prep {command} Report")
     lines.append("")
     lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"**Files:** {file_count}")

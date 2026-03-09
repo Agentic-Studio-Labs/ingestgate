@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RAG evaluation script for anam-prep output.
+"""RAG evaluation script for kb-prep output.
 
 Tests document quality by simulating retrieval + generation against
 a set of test questions with known ground truth answers.
@@ -86,7 +86,7 @@ def load_and_chunk(folder: str, chunk_size: int = 500, overlap: int = 100) -> li
 
     for md_file in sorted(folder_path.rglob("*.md")):
         # Skip report files
-        if md_file.name.startswith("anam-prep-"):
+        if md_file.name.startswith("kb-prep-"):
             continue
 
         text = md_file.read_text(encoding="utf-8", errors="replace")

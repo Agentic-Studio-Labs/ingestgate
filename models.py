@@ -1,4 +1,4 @@
-"""Data models for anam-prep document analysis and upload pipeline."""
+"""Data models for kb-prep document analysis and upload pipeline."""
 
 from dataclasses import dataclass, field
 from enum import Enum

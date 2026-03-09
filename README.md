@@ -1,4 +1,4 @@
-# anam-prep
+# kb-prep
 
 Prepare, score, fix, and upload documents to [anam.ai](https://anam.ai) knowledge base for RAG-powered AI personas.
 
@@ -147,7 +147,7 @@ Documents transition from `PROCESSING` → `READY` (typically ~30 seconds). The 
 ## Project Structure
 
 ```
-anam-prep/
+kb-prep/
 ├── cli.py              # CLI entry point (Click)
 ├── parser.py           # DOCX/PDF/TXT/MD parsing + Markdown conversion
 ├── scorer.py           # 8 heuristic + 1 graph-powered scoring criteria

@@ -114,7 +114,7 @@ def test_report_header():
     from cli import _report_header
     lines = _report_header(command="score", file_count=5)
     text = "\n".join(lines)
-    assert "# anam-prep" in text
+    assert "# kb-prep" in text
     assert "score" in text.lower()
     assert "5" in text
 
@@ -145,10 +145,10 @@ def test_generate_report_path():
     """_generate_report_path returns timestamped filename."""
     from cli import _generate_report_path
     path = _generate_report_path("analyze")
-    assert path.startswith("anam-prep-analyze-")
+    assert path.startswith("kb-prep-analyze-")
     assert path.endswith(".md")
     # Verify timestamp format YYYYMMDD-HHMMSS
-    parts = path.replace("anam-prep-analyze-", "").replace(".md", "")
+    parts = path.replace("kb-prep-analyze-", "").replace(".md", "")
     assert len(parts) == 15  # YYYYMMDD-HHMMSS
 ```
 
@@ -166,17 +166,17 @@ def _generate_report_path(command: str) -> str:
     """Generate a timestamped report filename."""
     from datetime import datetime
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return f"anam-prep-{command}-{ts}.md"
+    return f"kb-prep-{command}-{ts}.md"
 
 
 def _report_header(command: str, file_count: int) -> list[str]:
     """Report header with command name, timestamp, and file count."""
     from datetime import datetime
     lines = [
-        f"# anam-prep {command} Report",
+        f"# kb-prep {command} Report",
         "",
         f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        f"**Command:** `anam-prep {command}`",
+        f"**Command:** `kb-prep {command}`",
         f"**Files analyzed:** {file_count}",
         "",
     ]
@@ -400,10 +400,10 @@ def test_score_generates_report(tmp_path):
         result = runner.invoke(cli, ["score", test_file])
         assert result.exit_code == 0
         # Find the generated report
-        reports = [f for f in os.listdir(td) if f.startswith("anam-prep-score-")]
+        reports = [f for f in os.listdir(td) if f.startswith("kb-prep-score-")]
         assert len(reports) == 1, f"Expected 1 report, found: {reports}"
         content = open(reports[0]).read()
-        assert "# anam-prep score Report" in content
+        assert "# kb-prep score Report" in content
         assert "test.docx" in content
 
 
@@ -419,7 +419,7 @@ def test_score_no_report_flag(tmp_path):
     with runner.isolated_filesystem() as td:
         result = runner.invoke(cli, ["score", "--no-report", test_file])
         assert result.exit_code == 0
-        reports = [f for f in os.listdir(td) if f.startswith("anam-prep-")]
+        reports = [f for f in os.listdir(td) if f.startswith("kb-prep-")]
         assert len(reports) == 0
 ```
 
@@ -1182,13 +1182,13 @@ test: add integration test for concurrent analysis pipeline
 **Step 1: Update the module docstring to reflect new defaults**
 
 ```python
-"""anam-prep — Document preparation and upload CLI for anam.ai RAG.
+"""kb-prep — Document preparation and upload CLI for anam.ai RAG.
 
 Usage:
-    anam-prep score   <path>                          Score documents for RAG readiness
-    anam-prep analyze <path> --llm-key KEY            Score + LLM content analysis
-    anam-prep fix     <path> --llm-key KEY            Score + analyze + auto-fix issues
-    anam-prep upload  <path> --api-key KEY            Full pipeline: fix → recommend → upload
+    kb-prep score   <path>                          Score documents for RAG readiness
+    kb-prep analyze <path> --llm-key KEY            Score + LLM content analysis
+    kb-prep fix     <path> --llm-key KEY            Score + analyze + auto-fix issues
+    kb-prep upload  <path> --api-key KEY            Full pipeline: fix → recommend → upload
 
 All commands auto-generate a timestamped Markdown report (suppress with --no-report).
 LLM commands support --concurrency N (default: 5) for parallel API calls.

@@ -5,7 +5,7 @@ description: Use when running the document preparation pipeline on a folder of f
 
 # Prep and Eval
 
-Run the anam-prep fix pipeline on a document folder, then evaluate retrieval quality with the RAG eval script.
+Run the kb-prep fix pipeline on a document folder, then evaluate retrieval quality with the RAG eval script.
 
 ## Quick Reference
 

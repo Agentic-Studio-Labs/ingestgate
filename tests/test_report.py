@@ -27,7 +27,7 @@ def test_report_header():
     from cli import _report_header
     lines = _report_header(command="score", file_count=5)
     text = "\n".join(lines)
-    assert "# anam-prep" in text
+    assert "# kb-prep" in text
     assert "score" in text.lower()
     assert "5" in text
 
@@ -58,10 +58,10 @@ def test_generate_report_path():
     """_generate_report_path returns timestamped filename."""
     from cli import _generate_report_path
     path = _generate_report_path("analyze")
-    assert path.startswith("anam-prep-analyze-")
+    assert path.startswith("kb-prep-analyze-")
     assert path.endswith(".md")
     # Verify timestamp format YYYYMMDD-HHMMSS
-    parts = path.replace("anam-prep-analyze-", "").replace(".md", "")
+    parts = path.replace("kb-prep-analyze-", "").replace(".md", "")
     assert len(parts) == 15  # YYYYMMDD-HHMMSS
 
 
@@ -83,10 +83,10 @@ def test_score_generates_report(tmp_path):
         result = runner.invoke(cli, ["score", test_file])
         assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"
         # Find the generated report
-        reports = [f for f in os.listdir(td) if f.startswith("anam-prep-score-")]
+        reports = [f for f in os.listdir(td) if f.startswith("kb-prep-score-")]
         assert len(reports) == 1, f"Expected 1 report, found: {reports}"
         content = open(reports[0]).read()
-        assert "# anam-prep score Report" in content
+        assert "# kb-prep score Report" in content
         assert "test.docx" in content
 
 
@@ -102,5 +102,5 @@ def test_score_no_report_flag(tmp_path):
     with runner.isolated_filesystem() as td:
         result = runner.invoke(cli, ["score", "--no-report", test_file])
         assert result.exit_code == 0, f"Exit code {result.exit_code}: {result.output}"
-        reports = [f for f in os.listdir(td) if f.startswith("anam-prep-")]
+        reports = [f for f in os.listdir(td) if f.startswith("kb-prep-")]
         assert len(reports) == 0
