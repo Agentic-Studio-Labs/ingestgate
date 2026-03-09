@@ -107,11 +107,16 @@ def load_and_chunk(folder: str, chunk_size: int = 500, overlap: int = 100) -> li
                     source_file=rel_path,
                     chunk_index=len(chunks),
                 ))
-                # Keep overlap
+                # Keep trailing paragraphs for overlap
+                overlap_paras = []
                 overlap_words = 0
-                while current_chunk and overlap_words < overlap:
-                    overlap_words += len(current_chunk[-1].split())
-                    current_chunk = current_chunk[-1:]
+                for p in reversed(current_chunk):
+                    words = len(p.split())
+                    if overlap_words + words > overlap and overlap_paras:
+                        break
+                    overlap_paras.append(p)
+                    overlap_words += words
+                current_chunk = list(reversed(overlap_paras))
                 current_len = overlap_words
 
             current_chunk.append(para)

@@ -388,22 +388,22 @@ class DocumentFixer:
     async def _call_llm(self, prompt: str) -> Optional[str]:
         """Make a single LLM call with retry on rate limits."""
         max_retries = 3
-        async with self._semaphore:
-            for attempt in range(max_retries):
-                try:
+        for attempt in range(max_retries):
+            try:
+                async with self._semaphore:
                     response = await self.client.messages.create(
                         model=self.model,
                         max_tokens=self.max_tokens,
                         messages=[{"role": "user", "content": prompt}],
                     )
-                    return response.content[0].text.strip()
-                except Exception as e:
-                    error_str = str(e).lower()
-                    if attempt < max_retries - 1 and ("429" in error_str or "529" in error_str or "rate" in error_str or "overloaded" in error_str):
-                        wait = 2 ** (attempt + 1)
-                        await asyncio.sleep(wait)
-                        continue
-                    return None
+                return response.content[0].text.strip()
+            except Exception as e:
+                error_str = str(e).lower()
+                if attempt < max_retries - 1 and ("429" in error_str or "529" in error_str or "rate" in error_str or "overloaded" in error_str):
+                    wait = 2 ** (attempt + 1)
+                    await asyncio.sleep(wait)
+                    continue
+                return None
         return None
 
     def _write_fixed(
