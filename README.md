@@ -1,4 +1,4 @@
-# 3kb-prep
+# kb-prep
 
 Prepare, score, fix, and upload documents to [anam.ai](https://anam.ai) knowledge base for RAG-powered AI personas.
 
@@ -130,9 +130,9 @@ Entities are merged into a shared [networkx](https://networkx.org/) directed gra
 
 ### Downstream consumers
 
-- **Scorer** — detects orphan references (entities mentioned but never defined in any document) and isolated documents with no cross-document co**Fixer** — enriches dangling reference resolution with cross-document context. When a paragraph says "see Unit 2", the graph provides the actual content from Unit 2's document to inline.
-- **Recommender** — uses [Louvain community detection](https://en.wikipedia.org/wiki/Louvain_method) to cluster related documents into folders, then uses the LLM to generate descriptive folder names. Louvain finds densely-connected communities even when they share weak bridges — unlike connected components, which would merge everything reachable into a single cluster. Fnnections, surfaced as the Knowledge Completeness criterion.
-- alls back gracefully if the graph is empty.
+- **Scorer** — detects orphan references (entities mentioned but never defined in any document) and isolated documents with no cross-document connections, surfaced as the Knowledge Completeness criterion.
+- **Fixer** — enriches dangling reference resolution with cross-document context. When a paragraph says "see Unit 2", the graph provides the actual content from Unit 2's document to inline.
+- **Recommender** — uses [Louvain community detection](https://en.wikipedia.org/wiki/Louvain_method) to cluster related documents into folders, then uses the LLM to generate descriptive folder names. Louvain finds densely-connected communities even when they share weak bridges — unlike connected components, which would merge everything reachable into a single cluster. Falls back gracefully if the graph is empty.
 
 ### Example output
 
@@ -194,7 +194,11 @@ kb-prep/
 │   ├── run_eval.py               # RAG evaluation script (BM25 + anam vector search)
 │   └── test-questions.json        # Test questions with ground truth
 └── tests/
-    └── test_scoring.py # Scoring validation with synthetic docs
+    ├── test_scoring.py         # Scoring validation with synthetic docs
+    ├── test_graph.py           # Knowledge graph unit tests
+    ├── test_integration.py     # End-to-end pipeline tests
+    ├── test_async_analyzer.py  # Async analysis tests
+    └── test_async_fixer.py     # Async fixer tests
 ```
 
 ## RAG Evaluation
