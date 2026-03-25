@@ -727,6 +727,22 @@ if __name__ == "__main__":
             manifest[label] = {"status": "failed", "error": str(e)}
         _save_manifest(manifest)
 
+    # Summary
     print(f"\nManifest written to {MANIFEST_PATH}")
     ready = sum(1 for v in manifest.values() if v.get("status") == "ready")
-    print(f"Ready: {ready}/{len(ALL_SETUP_FNS)} datasets")
+    print(f"Ready: {ready}/{len(ALL_SETUP_FNS)} datasets\n")
+
+    # File breakdown
+    counts: dict[str, int] = {}
+    total_bytes = 0
+    for path in CORPORA_DIR.rglob("*"):
+        if path.is_file() and path.name != "manifest.json":
+            ext = path.suffix.lower() or "(no ext)"
+            counts[ext] = counts.get(ext, 0) + 1
+            total_bytes += path.stat().st_size
+
+    print("Files downloaded:")
+    for ext, count in sorted(counts.items(), key=lambda x: -x[1]):
+        print(f"  {count:5d} {ext}")
+    mb = total_bytes / (1024 * 1024)
+    print(f"  Total: {sum(counts.values())} files, {mb:.0f} MB")
