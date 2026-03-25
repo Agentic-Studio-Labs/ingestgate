@@ -1,8 +1,8 @@
 # kb-prep
 
-Prepare, score, fix, and upload documents for RAG. Includes built-in upload support for [anam.ai](https://anam.ai) knowledge base.
+Prepare, score, and fix documents for RAG. Includes upload support for [anam.ai](https://anam.ai) knowledge bases.
 
-Takes unstructured documents (DOCX, PDF, TXT, Markdown), scores them for RAG readiness using heuristic analysis, builds an in-memory knowledge graph for cross-document understanding, optionally auto-fixes issues with an LLM, and recommends a folder structure. Can upload directly to anam.ai or be used standalone to prep docs for any vector database or RAG pipeline.
+Takes unstructured documents (DOCX, PDF, TXT, Markdown), scores them for RAG readiness, builds a knowledge graph for cross-document understanding, and optionally auto-fixes issues with an LLM. Works standalone for any RAG pipeline or uploads directly to anam.ai.
 
 ## Install
 
@@ -14,59 +14,36 @@ Requires Python 3.10+.
 
 ## Quick Start
 
-### Score documents (no LLM, free)
-
 ```bash
+# Score documents (no LLM, no API keys)
 python cli.py score ./my-docs/
 python cli.py score ./my-docs/ --detail        # show every issue
 python cli.py score ./my-docs/ --json-output   # machine-readable
-```
 
-### Analyze with LLM (extracts topics, builds knowledge graph)
-
-```bash
+# Analyze with LLM (topics, knowledge graph, folder recommendations)
 python cli.py analyze ./my-docs/ --llm-key $ANTHROPIC_API_KEY
-```
 
-This parses every document, runs LLM content analysis, builds a knowledge graph across all documents, scores with graph-aware completeness checks, and recommends a folder structure based on detected topic clusters.
-
-### Auto-fix issues and output improved files
-
-```bash
+# Auto-fix issues and output improved Markdown
 python cli.py fix ./my-docs/ --llm-key $ANTHROPIC_API_KEY --output ./fixed/
-```
 
-### Full pipeline: parse → analyze → graph → score → fix → recommend → upload
-
-```bash
+# Full pipeline: fix + recommend folders + upload to anam.ai
 python cli.py upload ./my-docs/ \
   --api-key $ANAM_API_KEY \
   --llm-key $ANTHROPIC_API_KEY
-```
 
-### Dry run (preview without uploading)
+# Dry run (preview without uploading)
+python cli.py upload ./my-docs/ --api-key $ANAM_API_KEY --llm-key $ANTHROPIC_API_KEY --dry-run
 
-```bash
-python cli.py upload ./my-docs/ \
-  --api-key $ANAM_API_KEY \
-  --llm-key $ANTHROPIC_API_KEY \
-  --dry-run
-```
-
-### Upload and attach to a persona
-
-```bash
+# Upload and attach to a persona
 python cli.py upload ./my-docs/ \
   --api-key $ANAM_API_KEY \
   --llm-key $ANTHROPIC_API_KEY \
   --persona-id your-persona-id \
   --tool-name "Lesson Search" \
-  --tool-description "Search lesson plans to answer student and teacher questions"
+  --tool-description "Search lesson plans to answer questions"
 ```
 
-## Environment Variables
-
-Instead of passing keys as flags every time:
+Set environment variables to avoid passing keys every time:
 
 ```bash
 export ANAM_API_KEY=your-anam-key
@@ -75,28 +52,60 @@ export ANTHROPIC_API_KEY=your-anthropic-key
 
 ## How Scoring Works
 
-The scorer runs 8 heuristic checks (no LLM needed) plus 1 graph-powered check when LLM analysis is available.
+Every command runs the scoring pipeline. It combines heuristic checks with corpus-level TF-IDF analysis — no LLM needed.
 
+### Pipeline
 
-| Criterion              | Weight | What It Checks                                                                                                                                |
-| ---------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Self-Containment       | 25%    | Dangling references ("as mentioned above", "see section X") that break paragraph independence                                                 |
-| Heading Quality        | 20%    | Hierarchy gaps, generic headings ("Content", "Notes"), heading density                                                                        |
-| Paragraph Length       | 15%    | Too short (<15 words, no context) or too long (>300 words, diluted)                                                                           |
-| File Focus             | 15%    | Topic coherence — flags sprawling multi-topic documents                                                                                       |
-| Filename Quality       | 10%    | Generic names ("doc-v2.docx"), too short, no word separators                                                                                  |
-| Structure Completeness | 10%    | Presence of headings, substantive body text, multiple sections                                                                                |
-| Acronym Definitions    | 5%     | Uppercase acronyms used repeatedly without "(definition)" nearby                                                                              |
-| Knowledge Completeness | 5%     | Orphan references to undefined entities, isolated documents with no cross-document connections (graph-powered, only when LLM analysis is run) |
-| File Size              | info   | Warns at 25MB, blocks at 50MB (anam.ai limit)                                                                                                 |
+```
+Parse (DOCX/PDF/TXT/MD)
+  │
+  ├─ Corpus Analyzer ── TF-IDF matrix, document similarity, per-doc metrics
+  │
+  └─ Scorer ── 8 heuristic criteria + 1 retrieval-aware + 1 graph-powered
+```
 
+The **corpus analyzer** (`corpus_analyzer.py`) computes a TF-IDF matrix across all documents in one pass, then derives per-document metrics: topic entropy, heading-content coherence, readability grade, topic boundaries, and a self-retrieval score. These feed into the scorer alongside the existing heuristic checks.
+
+### Scoring Criteria
+
+| Criterion              | Weight | What It Checks |
+| ---------------------- | ------ | -------------- |
+| Self-Containment       | 20%    | Dangling references ("as mentioned above", "see section X") that break paragraph independence |
+| Retrieval-Aware        | 20%    | Can the document be found by BM25 queries about its own content? Generates synthetic queries from top TF-IDF terms and measures self-retrieval rate |
+| Heading Quality        | 15%    | Hierarchy gaps, generic headings ("Content", "Notes"), heading density |
+| Paragraph Length       | 15%    | Too short (<15 words) or too long (>300 words) |
+| File Focus             | 10%    | Shannon entropy over TF-IDF topic distribution — flags sprawling multi-topic documents |
+| Filename Quality       | 10%    | Generic names ("doc-v2.docx"), too short, no word separators |
+| Structure Completeness | 10%    | Presence of headings, substantive body text, multiple sections |
+| Acronym Definitions    | 5%     | Uppercase acronyms used repeatedly without "(definition)" nearby |
+| Knowledge Completeness | 5%*    | Orphan references, isolated documents (*graph-powered, only with LLM analysis) |
+| File Size              | info   | Warns at 25MB, blocks at 50MB (anam.ai limit) |
 
 **Readiness levels:** EXCELLENT (85+), GOOD (70-84), FAIR (50-69), POOR (<50)
 
+### Retrieval-Aware Scoring
+
+The most distinctive criterion. For each document, the scorer:
+
+1. Extracts the top TF-IDF terms (the document's most characteristic vocabulary)
+2. Generates synthetic queries from 3-term combinations
+3. Runs each query against the full corpus using BM25
+4. Measures what percentage of queries about this document actually find it in the top 5 results
+
+A document that scores 80-100% is well-structured for retrieval. A document scoring below 40% has structural problems — buried content, generic vocabulary, or misleading headings — that make it hard to find via search.
+
+### Corpus Analysis Metrics
+
+The corpus analyzer also computes these metrics (available in the analysis output, not used as scoring criteria):
+
+- **Readability grade** — Flesch-Kincaid grade level
+- **Information density** — TF-IDF magnitude per section
+- **Topic boundaries** — TextTiling-detected topic shifts within documents
+- **Document similarity matrix** — cosine similarity between all document pairs
+
 ## Auto-Fix (LLM-Powered)
 
-When you run `fix` or `upload` with `--llm-key`, the tool sends targeted prompts to Claude to fix each detected issue:
-
+When you run `fix` or `upload` with `--llm-key`, targeted prompts are sent to Claude to fix each detected issue:
 
 | Issue               | Fix Applied                                             |
 | ------------------- | ------------------------------------------------------- |
@@ -106,146 +115,76 @@ When you run `fix` or `upload` with `--llm-key`, the tool sends targeted prompts
 | Undefined acronyms  | Inserts "(Full Name)" after first occurrence            |
 | Generic filename    | Generates descriptive filename from content             |
 
-
 Originals are never modified. Fixed files are written as clean Markdown to the output directory.
 
 ## Knowledge Graph
 
-When LLM analysis runs (`analyze`, `fix`, or `upload` with `--llm-key`), the tool automatically builds an in-memory knowledge graph across all documents. This is not a separate step or flag — it happens as part of standard analysis and improves every downstream stage.
+When LLM analysis runs (`analyze`, `fix`, or `upload` with `--llm-key`), an in-memory knowledge graph is built across all documents automatically.
 
-### How it works
-
-The LLM extracts **entities** and **relationships** from each document. Only explicitly extracted entities are added to the graph — topics and key concepts from the analysis metadata are kept separate to avoid over-connecting unrelated documents through generic terms.
-
-Entities are merged into a shared [networkx](https://networkx.org/) directed graph using two-tier deduplication:
-
-1. **Exact match** — O(1) lookup via a normalized (lowercase, stripped) name index
-2. **Substring fallback** — for names **8+ characters** only, checks if one name contains another (e.g., "Financial Planning" matches "Financial Planning Basics"). Short names like "Goal" or "Credit" are excluded to prevent false merges.
-
+The LLM extracts **entities** and **relationships** from each document. Entities are merged into a shared [networkx](https://networkx.org/) directed graph using TF-IDF cosine similarity on character n-grams — this handles morphological variation ("Budget" matches "Budgeting"), word reordering, and typos.
 
 | Entity types                                          | Relationship types                                      |
 | ----------------------------------------------------- | ------------------------------------------------------- |
 | concept, skill, lesson, resource, assessment, process | prerequisite, related_to, part_of, assesses, influences |
 
+### Graph analysis
+
+- **Spectral clustering** — deterministic document grouping using the eigengap heuristic on the TF-IDF similarity matrix (replaces non-deterministic Louvain for document clustering)
+- **PageRank** — ranks entities by structural importance for folder naming
+- **Betweenness centrality** — identifies bridge entities connecting topic clusters
+- **Bipartite projection** — document-document similarity via shared entities (blended with TF-IDF similarity)
+- **Folder coherence validation** — silhouette analysis scores whether folder assignments actually group similar documents
 
 ### Downstream consumers
 
-- **Scorer** — detects orphan references (entities mentioned but never defined in any document) and isolated documents with no cross-document connections, surfaced as the Knowledge Completeness criterion.
-- **Fixer** — enriches dangling reference resolution with cross-document context. When a paragraph says "see Unit 2", the graph provides the actual content from Unit 2's document to inline.
-- **Recommender** — uses [Louvain community detection](https://en.wikipedia.org/wiki/Louvain_method) to cluster related documents into folders, then uses the LLM to generate descriptive folder names. Louvain finds densely-connected communities even when they share weak bridges — unlike connected components, which would merge everything reachable into a single cluster. Falls back gracefully if the graph is empty.
-
-### Example output
-
-The graph is lightweight (in-memory, no database) and adds negligible overhead since the LLM is already analyzing each document. A summary panel is printed after analysis:
-
-```
-╭────────────────────────────── Knowledge Graph ───────────────────────────────╮
-│ Entities: 520                                                                │
-│ Relationships: 614                                                           │
-│ Cross-document edges: 236                                                    │
-│ Topic clusters: 43                                                           │
-│ Entity types: concept: 181, skill: 97, lesson: 57, resource: 53,            │
-│ assessment: 41, process: 32                                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-```
+- **Scorer** — orphan references and cross-document connectivity (Knowledge Completeness criterion)
+- **Fixer** — cross-document context for resolving dangling references ("see Unit 2" gets actual Unit 2 content)
+- **Recommender** — graph clusters + PageRank for folder naming, silhouette validation for assignment quality
 
 ## Folder Recommendations
 
-The tool proposes a folder structure using a 4-tier priority: graph clusters + LLM naming (best), LLM-only, graph-only, or heuristic fallback. Since anam.ai uses a flat folder structure (no nesting), the path hierarchy is encoded into folder names. For example:
+The tool proposes a folder structure using a 4-tier priority: graph clusters + LLM naming (best), LLM-only, graph-only, or heuristic fallback. Since anam.ai uses flat folders, the path hierarchy is encoded into folder names:
 
 ```
-📁 Curriculum - Grade 3 Math
-📁 Curriculum - Grade 4 Science
-📁 Teacher Resources - Lesson Plans
-📁 Teacher Resources - Rubrics
-📁 Parent Guides
+Curriculum - Grade 3 Math
+Curriculum - Grade 4 Science
+Teacher Resources - Lesson Plans
+Teacher Resources - Rubrics
+Parent Guides
 ```
-
-With `upload`, these folders are created automatically via the anam.ai API, and each document is uploaded to its assigned folder.
 
 ## Using Without anam.ai
 
-Most of the pipeline is platform-agnostic. The `score`, `analyze`, and `fix` commands work entirely independently of anam.ai and can prep documents for any RAG system (Pinecone, Weaviate, Qdrant, LlamaIndex, etc.).
+The `score`, `analyze`, and `fix` commands work independently of anam.ai:
 
-| Command | anam.ai required? | What you get |
-|---------|-------------------|--------------|
-| `score` | No | RAG readiness scores, issue detection |
-| `analyze` | No | Knowledge graph, topic clusters, folder recommendations |
-| `fix` | No | Auto-fixed documents written to output directory |
-| `upload` | Yes | Folder creation, file upload, persona tool attachment |
-
-A typical non-anam workflow:
+| Command   | anam.ai required? | What you get |
+| --------- | ------------------ | ------------ |
+| `score`   | No                 | RAG readiness scores, corpus analysis metrics |
+| `analyze` | No                 | Knowledge graph, topic clusters, folder recommendations |
+| `fix`     | No                 | Auto-fixed Markdown documents |
+| `upload`  | Yes                | Folder creation, file upload, persona tool attachment |
 
 ```bash
-python cli.py score ./my-docs/                                    # check quality
-python cli.py fix ./my-docs/ --llm-key $ANTHROPIC_API_KEY --output ./fixed/  # fix issues
+python cli.py score ./my-docs/                                             # check quality
+python cli.py fix ./my-docs/ --llm-key $ANTHROPIC_API_KEY --output ./fixed/ # fix issues
 # upload ./fixed/ to your vector DB of choice
-```
-
-The folder recommendations from `analyze` can guide how you organize chunks or namespaces in any vector store, even without using the upload command.
-
-## How anam.ai Upload Works
-
-anam.ai uses a direct multipart upload:
-
-1. **Create folder** — POST to `/v1/knowledge/groups` with name and description
-2. **Upload file** — multipart POST to `/v1/knowledge/groups/{id}/documents`
-
-Documents transition from `PROCESSING` → `READY` (typically ~30 seconds). The tool handles folder creation and file upload automatically.
-
-When `--persona-id` is provided, a **knowledge tool** (type `SERVER_RAG`) is created that links all uploaded folders to the persona. The tool's description tells the avatar's LLM when to search the knowledge base.
-
-## Project Structure
-
-```
-kb-prep/
-├── cli.py              # CLI entry point (Click)
-├── parser.py           # DOCX/PDF/TXT/MD parsing + Markdown conversion
-├── scorer.py           # 8 heuristic + 1 graph-powered scoring criteria
-├── analyzer.py         # LLM content analysis (topics, domain, entities)
-├── graph_builder.py    # In-memory knowledge graph (networkx)
-├── fixer.py            # LLM auto-fix engine (graph-aware)
-├── recommender.py      # Folder structure recommendation (graph-aware)
-├── anam_client.py      # anam.ai REST API client
-├── prompts.py          # LLM prompt templates
-├── config.py           # Settings and API key management
-├── models.py           # All dataclasses (incl. Entity, Relationship)
-├── requirements.txt
-├── eval/
-│   ├── run_eval.py               # RAG evaluation script (BM25 + anam vector search)
-│   └── test-questions.json        # Test questions with ground truth
-└── tests/
-    ├── test_scoring.py         # Scoring validation with synthetic docs
-    ├── test_graph.py           # Knowledge graph unit tests
-    ├── test_integration.py     # End-to-end pipeline tests
-    ├── test_async_analyzer.py  # Async analysis tests
-    └── test_async_fixer.py     # Async fixer tests
 ```
 
 ## RAG Evaluation
 
-Evaluate document quality by testing retrieval + answer generation against a set of questions with known ground truth.
-
-### Local BM25 retrieval (no API needed)
+Evaluate document quality by testing retrieval + answer generation against questions with known ground truth.
 
 ```bash
-python eval/run_eval.py rag-files-20260302-094034/ --llm-key $ANTHROPIC_API_KEY
+# Local BM25 retrieval (no API needed)
+python eval/run_eval.py rag-files-*/ --llm-key $ANTHROPIC_API_KEY
+
+# anam.ai vector search (uses live KB)
+python eval/run_eval.py rag-files-*/ --llm-key $ANTHROPIC_API_KEY --anam-key $ANAM_API_KEY
 ```
-
-### anam.ai vector search (uses live KB)
-
-```bash
-python eval/run_eval.py rag-files-20260302-094034/ \
-  --llm-key $ANTHROPIC_API_KEY \
-  --anam-key $ANAM_API_KEY
-```
-
-With `--anam-key`, the eval searches all anam.ai knowledge base folders using vector similarity instead of local BM25, merging results across folders and ranking by score. The first run logs the response schema at INFO level so you can verify field mapping.
 
 **Metrics:** Retrieval Hit Rate, Context Precision, Faithfulness, Answer Correctness.
 
 ## Supported File Types
-
 
 | Format | Parsing                                                | Upload to anam.ai |
 | ------ | ------------------------------------------------------ | ----------------- |
@@ -254,6 +193,35 @@ With `--anam-key`, the eval searches all anam.ai knowledge base folders using ve
 | .md    | Full (Markdown heading syntax)                         | Yes               |
 | .txt   | Basic (paragraph splitting)                            | Yes               |
 
+## Project Structure
+
+```
+kb-prep/
+├── cli.py                # CLI entry point (Click) — score, analyze, fix, upload
+├── corpus_analyzer.py    # TF-IDF matrix, entropy, coherence, retrieval-aware scoring
+├── scorer.py             # Heuristic + corpus-powered scoring criteria
+├── parser.py             # DOCX/PDF/TXT/MD parsing + Markdown conversion
+├── analyzer.py           # LLM content analysis (topics, entities, relationships)
+├── graph_builder.py      # Knowledge graph (networkx) + spectral clustering + PageRank
+├── fixer.py              # LLM auto-fix engine (graph-aware)
+├── recommender.py        # Folder recommendation + silhouette validation
+├── anam_client.py        # anam.ai REST API client
+├── prompts.py            # LLM prompt templates
+├── config.py             # Settings and API key management
+├── models.py             # All dataclasses
+├── eval/
+│   ├── run_eval.py       # RAG evaluation (BM25 + anam vector search)
+│   └── test-questions.json
+└── tests/
+    ├── test_corpus_analyzer.py  # TF-IDF, entropy, coherence, retrieval tests
+    ├── test_scoring.py          # Scoring criteria validation
+    ├── test_graph.py            # Entity resolution, clustering, PageRank
+    ├── test_integration.py      # End-to-end pipeline tests
+    ├── test_async_analyzer.py   # Async LLM analysis tests
+    ├── test_async_fixer.py      # Async fixer tests
+    ├── test_config.py           # Configuration tests
+    └── test_report.py           # Report generation tests
+```
 
 ## Requirements
 
@@ -263,13 +231,15 @@ With `--anam-key`, the eval searches all anam.ai knowledge base folders using ve
 - `rich` — terminal formatting
 - `requests` — HTTP client for anam.ai API
 - `anthropic` — Claude API (only needed for analyze/fix/LLM features)
-- `networkx` — in-memory knowledge graph (used automatically during LLM analysis)
+- `networkx` — knowledge graph
+- `numpy` — numerical computation
+- `scipy` — signal processing (TextTiling), sparse matrices
+- `scikit-learn` — TF-IDF vectorization, spectral clustering, cosine similarity
 
 ## TODO
 
-- **Structured LLM output** — replace JSON-in-markdown prompts with tool_use / structured output for reliable entity and relationship extraction
+- **Structured LLM output** — replace JSON-in-markdown prompts with tool_use for reliable extraction
 - **Incremental analysis** — cache per-file analysis results so re-runs only process changed files
-- **Relationship deduplication** — merge duplicate edges (same source, target, type) and track edge weight/frequency
-- **Configurable thresholds** — expose scoring weights, fuzzy match length, and cluster resolution as CLI flags or config
-- **Export graph** — add `cli.py graph export` command to write the knowledge graph as GraphML, JSON, or DOT for external visualization
-
+- **Relationship deduplication** — merge duplicate edges and track edge weight/frequency
+- **Configurable thresholds** — expose scoring weights and cluster resolution as config
+- **Export graph** — write the knowledge graph as GraphML, JSON, or DOT
