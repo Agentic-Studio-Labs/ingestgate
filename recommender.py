@@ -62,7 +62,8 @@ class FolderRecommender:
     # ------------------------------------------------------------------
 
     async def _call_llm_for_folders(
-        self, doc_summaries: list[dict],
+        self,
+        doc_summaries: list[dict],
     ) -> Optional[FolderRecommendation]:
         """Shared LLM call + JSON parse + tree build for folder recommendations."""
         hints = self.config.folder_hints if self.config else ""
@@ -109,19 +110,19 @@ class FolderRecommender:
                     cluster_label = label
                     break
 
-            doc_summaries.append({
-                "filename": doc.metadata.filename,
-                "domain": analysis.domain,
-                "topics": analysis.topics,
-                "audience": analysis.audience,
-                "content_type": analysis.content_type,
-                "summary": analysis.summary,
-                "graph_cluster": cluster_label,
-                "entity_count": len(analysis.entities),
-                "cross_doc_connections": len(
-                    self.graph.get_cross_document_references(doc.metadata.filename)
-                ),
-            })
+            doc_summaries.append(
+                {
+                    "filename": doc.metadata.filename,
+                    "domain": analysis.domain,
+                    "topics": analysis.topics,
+                    "audience": analysis.audience,
+                    "content_type": analysis.content_type,
+                    "summary": analysis.summary,
+                    "graph_cluster": cluster_label,
+                    "entity_count": len(analysis.entities),
+                    "cross_doc_connections": len(self.graph.get_cross_document_references(doc.metadata.filename)),
+                }
+            )
 
         result = await self._call_llm_for_folders(doc_summaries)
         if result is None:
@@ -188,14 +189,16 @@ class FolderRecommender:
         """Use LLM to design optimal folder structure."""
         doc_summaries = []
         for doc, analysis in zip(docs, analyses):
-            doc_summaries.append({
-                "filename": doc.metadata.filename,
-                "domain": analysis.domain,
-                "topics": analysis.topics,
-                "audience": analysis.audience,
-                "content_type": analysis.content_type,
-                "summary": analysis.summary,
-            })
+            doc_summaries.append(
+                {
+                    "filename": doc.metadata.filename,
+                    "domain": analysis.domain,
+                    "topics": analysis.topics,
+                    "audience": analysis.audience,
+                    "content_type": analysis.content_type,
+                    "summary": analysis.summary,
+                }
+            )
 
         result = await self._call_llm_for_folders(doc_summaries)
         if result is None:
@@ -266,10 +269,38 @@ class FolderRecommender:
 
         return FolderRecommendation(root=root, file_assignments=assignments)
 
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    def validate_assignments(
+        self,
+        assignments: dict[str, str],
+        similarity_matrix,
+        doc_labels: list[str],
+    ) -> tuple[float, list[tuple[str, float]]]:
+        """Validate folder assignments using silhouette analysis."""
+        import numpy as np
+        from sklearn.metrics import silhouette_samples, silhouette_score
+
+        if len(set(assignments.values())) < 2 or len(doc_labels) < 3:
+            return 0.0, []
+        labels = [assignments.get(doc, "unknown") for doc in doc_labels]
+        unique_labels = list(set(labels))
+        if len(unique_labels) < 2:
+            return 0.0, []
+        numeric_labels = [unique_labels.index(lbl) for lbl in labels]
+        distance_matrix = 1 - np.clip(similarity_matrix, 0, 1)
+        score = float(silhouette_score(distance_matrix, numeric_labels, metric="precomputed"))
+        per_doc = silhouette_samples(distance_matrix, numeric_labels, metric="precomputed")
+        misplaced = [(doc_labels[i], float(per_doc[i])) for i in range(len(per_doc)) if per_doc[i] < 0]
+        return score, misplaced
+
 
 # ---------------------------------------------------------------------------
 # Display helper
 # ---------------------------------------------------------------------------
+
 
 def format_folder_tree(node: FolderNode, indent: int = 0) -> str:
     """Format a folder tree as a string for display."""

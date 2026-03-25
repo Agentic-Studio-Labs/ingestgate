@@ -14,8 +14,6 @@ LLM commands support --concurrency N (default: 5) for parallel API calls.
 import asyncio
 import os
 import shutil
-import sys
-import unicodedata
 from pathlib import Path
 
 import click
@@ -23,10 +21,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from rich.tree import Tree
 
 from config import Config
-from models import Readiness, ScoreCard, Severity
+from corpus_analyzer import build_corpus_analysis
+from models import ScoreCard, Severity
 from parser import DocumentParser, discover_files
 from scorer import QualityScorer
 
@@ -36,6 +34,7 @@ console = Console()
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
+
 
 @click.group()
 @click.version_option(version="0.1.0", prog_name="kb-prep")
@@ -47,6 +46,7 @@ def cli():
 # ---------------------------------------------------------------------------
 # score command
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
@@ -64,7 +64,7 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
     console.print(f"\nFound [cyan]{len(files)}[/cyan] file(s) to analyze.\n")
 
     parser = DocumentParser()
-    scorer = QualityScorer()
+    docs = []
     cards: list[ScoreCard] = []
 
     with Progress(
@@ -73,15 +73,20 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task("Scoring documents...", total=len(files))
+        task = progress.add_task("Parsing documents...", total=len(files))
         for file_path in files:
             try:
                 doc = parser.parse(file_path)
-                card = scorer.score(doc)
-                cards.append(card)
+                docs.append(doc)
             except Exception as e:
                 console.print(f"[red]Error parsing {file_path}: {e}[/red]")
             progress.advance(task)
+
+    corpus_analysis = build_corpus_analysis(docs)
+    scorer = QualityScorer(
+        corpus_analysis=corpus_analysis,
+    )
+    cards = [scorer.score(doc) for doc in docs]
 
     if json_out:
         _print_json(cards)
@@ -91,16 +96,20 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
     # Auto-generate report
     if not no_report and cards:
         report_path = _generate_report_path("score")
-        _write_report_file(report_path, [
-            _report_header("score", len(cards)),
-            _report_scores(cards, detail),
-        ])
+        _write_report_file(
+            report_path,
+            [
+                _report_header("score", len(cards)),
+                _report_scores(cards, detail),
+            ],
+        )
         console.print(f"\n[green]Report:[/green] {report_path}")
 
 
 # ---------------------------------------------------------------------------
 # analyze command
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
@@ -110,8 +119,19 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
 @click.option("--exclude", multiple=True, help="Exclude files containing this substring (repeatable)")
 @click.option("--no-report", is_flag=True, help="Suppress markdown report generation")
 @click.option("--concurrency", default=5, type=int, help="Max parallel LLM calls (default: 5)")
-@click.option("--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance")
-def analyze(path: str, llm_key: str, model: str, detail: bool, exclude: tuple, no_report: bool, concurrency: int, folder_hints: str):
+@click.option(
+    "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
+)
+def analyze(
+    path: str,
+    llm_key: str,
+    model: str,
+    detail: bool,
+    exclude: tuple,
+    no_report: bool,
+    concurrency: int,
+    folder_hints: str,
+):
     """Score documents + LLM content analysis and folder recommendation."""
     from analyzer import ContentAnalyzer
     from recommender import FolderRecommender, format_folder_tree
@@ -151,8 +171,12 @@ def analyze(path: str, llm_key: str, model: str, detail: bool, exclude: tuple, n
         progress.add_task("Analyzing content & building knowledge graph...", total=None)
         analyses, graph = asyncio.run(analyzer_inst.analyze_and_build_graph(docs))
 
-    # Score with graph context
-    scorer = QualityScorer(graph=graph)
+    # Score with graph and corpus context
+    corpus_analysis = build_corpus_analysis(docs)
+    scorer = QualityScorer(
+        graph=graph,
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
 
     # Show scores
@@ -184,19 +208,23 @@ def analyze(path: str, llm_key: str, model: str, detail: bool, exclude: tuple, n
     # Auto-generate report
     if not no_report:
         report_path = _generate_report_path("analyze")
-        _write_report_file(report_path, [
-            _report_header("analyze", len(docs)),
-            _report_scores(cards, detail),
-            _report_analyses(docs, analyses),
-            _report_graph(graph),
-            _report_recommendations(recommendation),
-        ])
+        _write_report_file(
+            report_path,
+            [
+                _report_header("analyze", len(docs)),
+                _report_scores(cards, detail),
+                _report_analyses(docs, analyses),
+                _report_graph(graph),
+                _report_recommendations(recommendation),
+            ],
+        )
         console.print(f"\n[green]Report:[/green] {report_path}")
 
 
 # ---------------------------------------------------------------------------
 # fix command
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
@@ -207,14 +235,27 @@ def analyze(path: str, llm_key: str, model: str, detail: bool, exclude: tuple, n
 @click.option("--exclude", multiple=True, help="Exclude files containing this substring (repeatable)")
 @click.option("--no-report", is_flag=True, help="Suppress markdown report generation")
 @click.option("--concurrency", default=5, type=int, help="Max parallel LLM calls (default: 5)")
-@click.option("--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance")
-def fix(path: str, llm_key: str, model: str, output: str, min_score: float, exclude: tuple, no_report: bool, concurrency: int, folder_hints: str):
+@click.option(
+    "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
+)
+def fix(
+    path: str,
+    llm_key: str,
+    model: str,
+    output: str,
+    min_score: float,
+    exclude: tuple,
+    no_report: bool,
+    concurrency: int,
+    folder_hints: str,
+):
     """Score + auto-fix issues, output improved Markdown files."""
     from datetime import datetime
+
     from analyzer import ContentAnalyzer
     from fixer import DocumentFixer
-    from recommender import FolderRecommender, format_folder_tree
     from parser import to_markdown
+    from recommender import FolderRecommender, format_folder_tree
 
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
@@ -259,8 +300,12 @@ def fix(path: str, llm_key: str, model: str, output: str, min_score: float, excl
     console.print("[dim]Building knowledge graph...[/dim]")
     analyses, graph = asyncio.run(analyzer_inst.analyze_and_build_graph(docs))
 
-    # Score with graph context, then fix with graph context
-    scorer = QualityScorer(graph=graph)
+    # Score with graph and corpus context, then fix with graph context
+    corpus_analysis = build_corpus_analysis(docs)
+    scorer = QualityScorer(
+        graph=graph,
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
     fixer_inst = DocumentFixer(config, graph=graph)
     fix_reports = []
@@ -277,6 +322,7 @@ def fix(path: str, llm_key: str, model: str, output: str, min_score: float, excl
         docs_to_fix.append((doc, card))
 
     if docs_to_fix:
+
         async def _fix_all():
             tasks = [fixer_inst.fix(doc, card) for doc, card in docs_to_fix]
             return await asyncio.gather(*tasks, return_exceptions=True)
@@ -358,18 +404,22 @@ def fix(path: str, llm_key: str, model: str, output: str, min_score: float, excl
     if not no_report:
         report_name = f"kb-prep-fix-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
         report_path = os.path.join(output, report_name)
-        _write_report_file(report_path, [
-            _report_header("fix", len(docs)),
-            _report_scores(cards, detail=False),
-            _report_fixes(fix_reports),
-            _report_recommendations(recommendation),
-        ])
+        _write_report_file(
+            report_path,
+            [
+                _report_header("fix", len(docs)),
+                _report_scores(cards, detail=False),
+                _report_fixes(fix_reports),
+                _report_recommendations(recommendation),
+            ],
+        )
         console.print(f"[green]Report:[/green] {report_path}")
 
 
 # ---------------------------------------------------------------------------
 # upload command
 # ---------------------------------------------------------------------------
+
 
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
@@ -385,7 +435,9 @@ def fix(path: str, llm_key: str, model: str, output: str, min_score: float, excl
 @click.option("--exclude", multiple=True, help="Exclude files containing this substring (repeatable)")
 @click.option("--no-report", is_flag=True, help="Suppress markdown report generation")
 @click.option("--concurrency", default=5, type=int, help="Max parallel LLM calls (default: 5)")
-@click.option("--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance")
+@click.option(
+    "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
+)
 def upload(
     path: str,
     api_key: str,
@@ -404,8 +456,8 @@ def upload(
 ):
     """Full pipeline: score → analyze → fix → recommend folders → upload."""
     from analyzer import ContentAnalyzer
-    from fixer import DocumentFixer
     from anam_client import AnamClient
+    from fixer import DocumentFixer
     from recommender import FolderRecommender, format_folder_tree
 
     hints_text = Path(folder_hints).read_text().strip() if folder_hints else ""
@@ -450,10 +502,15 @@ def upload(
     else:
         console.print("\n[dim]Step 2: Skipped (no --llm-key provided)[/dim]")
         from models import ContentAnalysis
+
         analyses = [ContentAnalysis() for _ in docs]
 
-    # Score with graph context
-    scorer = QualityScorer(graph=graph)
+    # Score with graph and corpus context
+    corpus_analysis = build_corpus_analysis(docs)
+    scorer = QualityScorer(
+        graph=graph,
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
     _print_score_table(cards, detail=False)
 
@@ -477,6 +534,7 @@ def upload(
                 fixed_files.append((i, doc.metadata.file_path))
 
         if docs_to_fix:
+
             async def _fix_all():
                 tasks = [fixer_inst.fix(doc, card) for _, doc, card in docs_to_fix]
                 return await asyncio.gather(*tasks, return_exceptions=True)
@@ -555,7 +613,7 @@ def upload(
     )
 
     # Summary
-    console.print(f"\n[bold]Upload Complete[/bold]")
+    console.print("\n[bold]Upload Complete[/bold]")
     console.print(f"  Folders created: {len(upload_report.folders_created)}")
     console.print(f"  Files uploaded:  {len(upload_report.successful)}")
     console.print(f"  Failed:          {len(upload_report.failed)}")
@@ -578,13 +636,16 @@ def upload(
     # Auto-generate report
     if not no_report:
         report_path = _generate_report_path("upload")
-        _write_report_file(report_path, [
-            _report_header("upload", len(docs)),
-            _report_scores(cards, detail=False),
-            _report_fixes(fix_reports),
-            _report_recommendations(recommendation),
-            _report_uploads(upload_report),
-        ])
+        _write_report_file(
+            report_path,
+            [
+                _report_header("upload", len(docs)),
+                _report_scores(cards, detail=False),
+                _report_fixes(fix_reports),
+                _report_recommendations(recommendation),
+                _report_uploads(upload_report),
+            ],
+        )
         console.print(f"\n[green]Report:[/green] {report_path}")
 
 
@@ -593,12 +654,14 @@ def upload(
 # ---------------------------------------------------------------------------
 
 # Smart/curly quotes that LLMs commonly normalize to ASCII equivalents.
-_QUOTE_TABLE = str.maketrans({
-    "\u2018": "'",   # LEFT SINGLE QUOTATION MARK → apostrophe
-    "\u2019": "'",   # RIGHT SINGLE QUOTATION MARK → apostrophe
-    "\u201C": '"',   # LEFT DOUBLE QUOTATION MARK → double quote
-    "\u201D": '"',   # RIGHT DOUBLE QUOTATION MARK → double quote
-})
+_QUOTE_TABLE = str.maketrans(
+    {
+        "\u2018": "'",  # LEFT SINGLE QUOTATION MARK → apostrophe
+        "\u2019": "'",  # RIGHT SINGLE QUOTATION MARK → apostrophe
+        "\u201c": '"',  # LEFT DOUBLE QUOTATION MARK → double quote
+        "\u201d": '"',  # RIGHT DOUBLE QUOTATION MARK → double quote
+    }
+)
 
 
 def _normalize_quotes(s: str) -> str:
@@ -646,6 +709,7 @@ def _recommendation_from_disk(base_path: str, files: list[str]) -> "FolderRecomm
 # Display helpers
 # ---------------------------------------------------------------------------
 
+
 def _print_score_table(cards: list[ScoreCard], detail: bool):
     """Print a summary table of all scored documents."""
     table = Table(title="RAG Readiness Scores")
@@ -674,7 +738,9 @@ def _print_score_table(cards: list[ScoreCard], detail: bool):
             "FAIR": "dark_orange",
             "POOR": "red",
         }
-        readiness_str = f"[{readiness_colors.get(readiness, 'white')}]{readiness}[/{readiness_colors.get(readiness, 'white')}]"
+        readiness_str = (
+            f"[{readiness_colors.get(readiness, 'white')}]{readiness}[/{readiness_colors.get(readiness, 'white')}]"
+        )
 
         # File size
         size_result = next((r for r in card.results if r.category == "file_size"), None)
@@ -705,7 +771,9 @@ def _print_score_table(cards: list[ScoreCard], detail: bool):
                     label = result.label if result else cat
                     cat_score = result.score if result else 0
 
-                    console.print(f"\n  [{_severity_color(issues[0].severity)}]{label}[/{_severity_color(issues[0].severity)}] (score: {cat_score:.0f})")
+                    console.print(
+                        f"\n  [{_severity_color(issues[0].severity)}]{label}[/{_severity_color(issues[0].severity)}] (score: {cat_score:.0f})"
+                    )
                     for issue in issues[:5]:  # Limit display
                         console.print(f"    • {issue.message}")
                         if issue.fix:
@@ -741,7 +809,7 @@ def _print_graph_summary(graph):
 
 def _print_analysis(filename: str, analysis):
     """Print LLM content analysis for a document."""
-    from models import ContentAnalysis
+
     panel_content = []
     if analysis.domain:
         panel_content.append(f"[bold]Domain:[/bold] {analysis.domain}")
@@ -762,29 +830,32 @@ def _print_analysis(filename: str, analysis):
 def _print_json(cards: list[ScoreCard]):
     """Output scoring results as JSON."""
     import json
+
     output = []
     for card in cards:
-        output.append({
-            "file": card.file_path,
-            "score": round(card.overall_score, 1),
-            "readiness": card.readiness.value,
-            "categories": {
-                r.category: {
-                    "score": round(r.score, 1),
-                    "issues": len(r.issues),
-                }
-                for r in card.results
-            },
-            "issues": [
-                {
-                    "severity": i.severity.value,
-                    "category": i.category,
-                    "message": i.message,
-                    "fix": i.fix,
-                }
-                for i in card.all_issues
-            ],
-        })
+        output.append(
+            {
+                "file": card.file_path,
+                "score": round(card.overall_score, 1),
+                "readiness": card.readiness.value,
+                "categories": {
+                    r.category: {
+                        "score": round(r.score, 1),
+                        "issues": len(r.issues),
+                    }
+                    for r in card.results
+                },
+                "issues": [
+                    {
+                        "severity": i.severity.value,
+                        "category": i.category,
+                        "message": i.message,
+                        "fix": i.fix,
+                    }
+                    for i in card.all_issues
+                ],
+            }
+        )
     console.print_json(json.dumps(output, indent=2))
 
 
@@ -800,9 +871,11 @@ def _severity_color(severity: Severity) -> str:
 # Composable report section writers (Task 2)
 # ---------------------------------------------------------------------------
 
+
 def _generate_report_path(command: str) -> str:
     """Return a timestamped report filename: kb-prep-{command}-{YYYYMMDD-HHMMSS}.md"""
     from datetime import datetime
+
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     return f"kb-prep-{command}-{ts}.md"
 
@@ -810,6 +883,7 @@ def _generate_report_path(command: str) -> str:
 def _report_header(command: str, file_count: int) -> list[str]:
     """Markdown header with command name, timestamp, and file count."""
     from datetime import datetime
+
     lines: list[str] = []
     lines.append(f"# kb-prep {command} Report")
     lines.append("")
@@ -828,9 +902,7 @@ def _report_scores(cards: list[ScoreCard], detail: bool) -> list[str]:
     lines.append("|------|------:|:---------:|-------:|")
     for card in cards:
         filename = Path(card.file_path).name
-        lines.append(
-            f"| {filename} | {card.overall_score:.0f} | {card.readiness.value} | {len(card.all_issues)} |"
-        )
+        lines.append(f"| {filename} | {card.overall_score:.0f} | {card.readiness.value} | {len(card.all_issues)} |")
     lines.append("")
 
     avg_score = sum(c.overall_score for c in cards) / len(cards) if cards else 0
