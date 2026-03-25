@@ -54,7 +54,11 @@ def cli():
 @click.option("--json-output", "json_out", is_flag=True, help="Output as JSON")
 @click.option("--exclude", multiple=True, help="Exclude files containing this substring (repeatable)")
 @click.option("--no-report", is_flag=True, help="Suppress markdown report generation")
-@click.option("--audience", default=None, help="Target audience grade range (e.g. 'grade 3-6')")
+@click.option(
+    "--audience",
+    default=None,
+    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
+)
 def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bool, audience: str):
     """Analyze and score documents for RAG readiness (no LLM required)."""
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
@@ -121,7 +125,11 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
 @click.option(
     "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
 )
-@click.option("--audience", default=None, help="Target audience grade range (e.g. 'grade 3-6')")
+@click.option(
+    "--audience",
+    default=None,
+    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
+)
 def analyze(
     path: str,
     llm_key: str,
@@ -236,7 +244,11 @@ def analyze(
 @click.option(
     "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
 )
-@click.option("--audience", default=None, help="Target audience grade range (e.g. 'grade 3-6')")
+@click.option(
+    "--audience",
+    default=None,
+    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
+)
 def fix(
     path: str,
     llm_key: str,
@@ -435,7 +447,11 @@ def fix(
 @click.option(
     "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
 )
-@click.option("--audience", default=None, help="Target audience grade range (e.g. 'grade 3-6')")
+@click.option(
+    "--audience",
+    default=None,
+    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
+)
 def upload(
     path: str,
     api_key: str,
