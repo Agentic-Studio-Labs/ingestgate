@@ -164,7 +164,6 @@ def test_new_scoring_criteria_present():
         scorer = QualityScorer(corpus_analysis=ca)
         card = scorer.score(doc)
         categories = {r.category for r in card.results}
-        assert "readability" in categories
         assert "retrieval_aware" in categories
 
 

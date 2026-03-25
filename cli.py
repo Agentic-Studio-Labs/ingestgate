@@ -54,12 +54,7 @@ def cli():
 @click.option("--json-output", "json_out", is_flag=True, help="Output as JSON")
 @click.option("--exclude", multiple=True, help="Exclude files containing this substring (repeatable)")
 @click.option("--no-report", is_flag=True, help="Suppress markdown report generation")
-@click.option(
-    "--audience",
-    default=None,
-    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
-)
-def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bool, audience: str):
+def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bool):
     """Analyze and score documents for RAG readiness (no LLM required)."""
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
@@ -88,7 +83,9 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
             progress.advance(task)
 
     corpus_analysis = build_corpus_analysis(docs)
-    scorer = QualityScorer(corpus_analysis=corpus_analysis, audience=audience or "")
+    scorer = QualityScorer(
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
 
     if json_out:
@@ -125,11 +122,6 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
 @click.option(
     "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
 )
-@click.option(
-    "--audience",
-    default=None,
-    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
-)
 def analyze(
     path: str,
     llm_key: str,
@@ -139,7 +131,6 @@ def analyze(
     no_report: bool,
     concurrency: int,
     folder_hints: str,
-    audience: str,
 ):
     """Score documents + LLM content analysis and folder recommendation."""
     from analyzer import ContentAnalyzer
@@ -182,7 +173,10 @@ def analyze(
 
     # Score with graph and corpus context
     corpus_analysis = build_corpus_analysis(docs)
-    scorer = QualityScorer(graph=graph, corpus_analysis=corpus_analysis, audience=audience or "")
+    scorer = QualityScorer(
+        graph=graph,
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
 
     # Show scores
@@ -244,11 +238,6 @@ def analyze(
 @click.option(
     "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
 )
-@click.option(
-    "--audience",
-    default=None,
-    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
-)
 def fix(
     path: str,
     llm_key: str,
@@ -259,7 +248,6 @@ def fix(
     no_report: bool,
     concurrency: int,
     folder_hints: str,
-    audience: str,
 ):
     """Score + auto-fix issues, output improved Markdown files."""
     from datetime import datetime
@@ -314,7 +302,10 @@ def fix(
 
     # Score with graph and corpus context, then fix with graph context
     corpus_analysis = build_corpus_analysis(docs)
-    scorer = QualityScorer(graph=graph, corpus_analysis=corpus_analysis, audience=audience or "")
+    scorer = QualityScorer(
+        graph=graph,
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
     fixer_inst = DocumentFixer(config, graph=graph)
     fix_reports = []
@@ -447,11 +438,6 @@ def fix(
 @click.option(
     "--folder-hints", default=None, type=click.Path(exists=True), help="File with domain-specific folder guidance"
 )
-@click.option(
-    "--audience",
-    default=None,
-    help="Target reading level as grade range, e.g. '3-6' for students or '8-14' for teachers (default: 5-9)",
-)
 def upload(
     path: str,
     api_key: str,
@@ -467,7 +453,6 @@ def upload(
     no_report: bool,
     concurrency: int,
     folder_hints: str,
-    audience: str,
 ):
     """Full pipeline: score → analyze → fix → recommend folders → upload."""
     from analyzer import ContentAnalyzer
@@ -522,7 +507,10 @@ def upload(
 
     # Score with graph and corpus context
     corpus_analysis = build_corpus_analysis(docs)
-    scorer = QualityScorer(graph=graph, corpus_analysis=corpus_analysis, audience=audience or "")
+    scorer = QualityScorer(
+        graph=graph,
+        corpus_analysis=corpus_analysis,
+    )
     cards = [scorer.score(doc) for doc in docs]
     _print_score_table(cards, detail=False)
 

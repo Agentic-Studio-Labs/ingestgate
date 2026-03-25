@@ -43,34 +43,16 @@ class QualityScorer:
     FOCUS_HIGH_DIVERSITY = 0.85  # Flag as sprawling
     FOCUS_MODERATE_DIVERSITY = 0.70  # Flag as broad
 
-    def __init__(self, graph=None, corpus_analysis=None, audience: str = ""):
+    def __init__(self, graph=None, corpus_analysis=None):
         """Initialize scorer with optional knowledge graph and corpus analysis.
 
         If a graph is provided, adds Knowledge Completeness scoring
         (orphan references, cross-document gaps).
-        If corpus_analysis is provided, enables entropy-based file focus,
-        readability, and retrieval-aware scoring.
+        If corpus_analysis is provided, enables entropy-based file focus
+        and retrieval-aware scoring.
         """
         self.graph = graph
         self.corpus_analysis = corpus_analysis
-        self._audience_hint = audience
-
-    def _parse_audience_range(self) -> tuple[float, float]:
-        """Parse audience hint into a (min_grade, max_grade) reading level range.
-
-        Accepts a numeric grade range like "8-14", "3-6", or "grade 3-6".
-        Returns default (5-9) if no audience is specified or parsing fails.
-        """
-        audience = getattr(self, "_audience_hint", None) or ""
-        audience = audience.strip()
-        if not audience:
-            return 5.0, 9.0
-
-        m = re.search(r"(\d+)\s*[-–]\s*(\d+)", audience)
-        if m:
-            return float(m.group(1)), float(m.group(2))
-
-        return 5.0, 9.0
 
     def score(self, doc: ParsedDocument) -> ScoreCard:
         """Run all scoring criteria and return a complete ScoreCard."""
@@ -84,7 +66,6 @@ class QualityScorer:
         card.add_result(self._score_acronym_definitions(doc))
         card.add_result(self._score_structure_completeness(doc))
         card.add_result(self._score_file_size(doc))
-        card.add_result(self._score_readability(doc))
         card.add_result(self._score_retrieval_aware(doc))
 
         # Graph-powered scoring (when available)
@@ -752,44 +733,8 @@ class QualityScorer:
     # 9. Readability (corpus-powered, when available)
     # ------------------------------------------------------------------
 
-    def _score_readability(self, doc: ParsedDocument) -> ScoringResult:
-        """Score reading level against target audience range."""
-        issues: list[Issue] = []
-        if not self.corpus_analysis:
-            return ScoringResult(category="readability", label="Readability", score=75.0, weight=0.05, issues=[])
-        metrics = self.corpus_analysis.doc_metrics.get(doc.metadata.filename)
-        if not metrics:
-            return ScoringResult(category="readability", label="Readability", score=75.0, weight=0.05, issues=[])
-        grade = metrics.readability_grade
-        target_min, target_max = self._parse_audience_range()
-        if target_min <= grade <= target_max:
-            score = 100.0
-        elif abs(grade - target_min) <= 2 or abs(grade - target_max) <= 2:
-            score = 70.0
-            issues.append(
-                Issue(
-                    severity=Severity.INFO,
-                    category="readability",
-                    message=(
-                        f"Reading level ({grade:.1f}) slightly outside target range ({target_min:.0f}-{target_max:.0f})"
-                    ),
-                    fix="Adjust vocabulary complexity to match target audience.",
-                )
-            )
-        else:
-            score = 40.0
-            issues.append(
-                Issue(
-                    severity=Severity.WARNING,
-                    category="readability",
-                    message=f"Reading level ({grade:.1f}) far outside target range ({target_min:.0f}-{target_max:.0f})",
-                    fix="Significantly simplify or complexify language for target audience.",
-                )
-            )
-        return ScoringResult(category="readability", label="Readability", score=score, weight=0.05, issues=issues)
-
     # ------------------------------------------------------------------
-    # 10. Retrieval-Aware (corpus-powered, when available)
+    # 9. Retrieval-Aware (corpus-powered, when available)
     # ------------------------------------------------------------------
 
     def _score_retrieval_aware(self, doc: ParsedDocument) -> ScoringResult:
@@ -797,12 +742,12 @@ class QualityScorer:
         issues: list[Issue] = []
         if not self.corpus_analysis:
             return ScoringResult(
-                category="retrieval_aware", label="Retrieval-Aware", score=75.0, weight=0.15, issues=[]
+                category="retrieval_aware", label="Retrieval-Aware", score=75.0, weight=0.20, issues=[]
             )
         metrics = self.corpus_analysis.doc_metrics.get(doc.metadata.filename)
         if not metrics:
             return ScoringResult(
-                category="retrieval_aware", label="Retrieval-Aware", score=75.0, weight=0.15, issues=[]
+                category="retrieval_aware", label="Retrieval-Aware", score=75.0, weight=0.20, issues=[]
             )
         rate = metrics.self_retrieval_score
         score = rate * 100
@@ -825,7 +770,7 @@ class QualityScorer:
                 )
             )
         return ScoringResult(
-            category="retrieval_aware", label="Retrieval-Aware", score=score, weight=0.15, issues=issues
+            category="retrieval_aware", label="Retrieval-Aware", score=score, weight=0.20, issues=issues
         )
 
     # ------------------------------------------------------------------
