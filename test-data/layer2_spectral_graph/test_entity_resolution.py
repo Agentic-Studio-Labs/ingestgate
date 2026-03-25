@@ -146,7 +146,7 @@ def _evaluate_er(engine, source_a, source_b, true_matches):
         ("DBLP-ACM", F1_DBLP_ACM),
         ("DBLP-Scholar", F1_DBLP_SCHOLAR),
         ("Abt-Buy", F1_ABT_BUY),
-        ("Amazon-Google", F1_AMAZON_GOOGLE),
+        ("Amazon-GoogleProducts", F1_AMAZON_GOOGLE),
     ],
 )
 def test_task04_entity_resolution(engine, leipzig_er_data, ds_name, min_f1):

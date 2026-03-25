@@ -144,7 +144,7 @@ def leipzig_er_data():
     if not data_dir.exists():
         pytest.skip("Leipzig ER not found. Run setup.py first.")
     datasets = {}
-    for ds_name in ["Abt-Buy", "Amazon-Google", "DBLP-ACM", "DBLP-Scholar"]:
+    for ds_name in ["Abt-Buy", "Amazon-GoogleProducts", "DBLP-ACM", "DBLP-Scholar"]:
         ds_dir = data_dir / ds_name
         if not ds_dir.exists():
             continue

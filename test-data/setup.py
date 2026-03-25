@@ -413,7 +413,7 @@ def setup_arxiv_sample(manifest: dict):
 
 
 def setup_leipzig_er(manifest: dict):
-    """Leipzig entity resolution benchmarks — Abt-Buy, Amazon-Google, DBLP-ACM, DBLP-Scholar."""
+    """Leipzig entity resolution benchmarks — Abt-Buy, Amazon-GoogleProducts, DBLP-ACM, DBLP-Scholar."""
     name = "leipzig_er"
     if _is_ready(name, manifest):
         print(f"  {name}: already cached, skipping")
@@ -426,7 +426,7 @@ def setup_leipzig_er(manifest: dict):
     # These datasets are available from various mirrors
     datasets_info = {
         "Abt-Buy": "https://dbs.uni-leipzig.de/file/Abt-Buy.zip",
-        "Amazon-Google": "https://dbs.uni-leipzig.de/file/Amazon-Google.zip",
+        "Amazon-GoogleProducts": "https://dbs.uni-leipzig.de/file/Amazon-GoogleProducts.zip",
         "DBLP-ACM": "https://dbs.uni-leipzig.de/file/DBLP-ACM.zip",
         "DBLP-Scholar": "https://dbs.uni-leipzig.de/file/DBLP-Scholar.zip",
     }
