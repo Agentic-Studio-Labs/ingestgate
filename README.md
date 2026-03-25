@@ -1,8 +1,8 @@
 # kb-prep
 
-Prepare, score, and fix documents for RAG. Includes upload support for [anam.ai](https://anam.ai) knowledge bases.
+Prepare, score, and fix documents for RAG.
 
-Takes unstructured documents (DOCX, PDF, TXT, Markdown), scores them for RAG readiness, builds a knowledge graph for cross-document understanding, and optionally auto-fixes issues with an LLM. Works standalone for any RAG pipeline or uploads directly to anam.ai.
+Takes unstructured documents (DOCX, PDF, TXT, Markdown), scores them for RAG readiness, builds a knowledge graph for cross-document understanding, and optionally auto-fixes issues with an LLM. Works with any vector database or RAG pipeline.
 
 ## Install
 
@@ -25,28 +25,11 @@ python cli.py analyze ./my-docs/ --llm-key $ANTHROPIC_API_KEY
 
 # Auto-fix issues and output improved Markdown
 python cli.py fix ./my-docs/ --llm-key $ANTHROPIC_API_KEY --output ./fixed/
-
-# Full pipeline: fix + recommend folders + upload to anam.ai
-python cli.py upload ./my-docs/ \
-  --api-key $ANAM_API_KEY \
-  --llm-key $ANTHROPIC_API_KEY
-
-# Dry run (preview without uploading)
-python cli.py upload ./my-docs/ --api-key $ANAM_API_KEY --llm-key $ANTHROPIC_API_KEY --dry-run
-
-# Upload and attach to a persona
-python cli.py upload ./my-docs/ \
-  --api-key $ANAM_API_KEY \
-  --llm-key $ANTHROPIC_API_KEY \
-  --persona-id your-persona-id \
-  --tool-name "Doc Search" \
-  --tool-description "Search documents to answer questions"
 ```
 
 Set environment variables to avoid passing keys every time:
 
 ```bash
-export ANAM_API_KEY=your-anam-key
 export ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
@@ -79,7 +62,7 @@ The **corpus analyzer** (`corpus_analyzer.py`) computes a TF-IDF matrix across a
 | Structure Completeness | 10%    | Presence of headings, substantive body text, multiple sections |
 | Acronym Definitions    | 5%     | Uppercase acronyms used repeatedly without "(definition)" nearby |
 | Knowledge Completeness | 5%*    | Orphan references, isolated documents (*graph-powered, only with LLM analysis) |
-| File Size              | info   | Warns at 25MB, blocks at 50MB (anam.ai limit) |
+| File Size              | info   | Warns at 25MB, blocks at 50MB |
 
 **Readiness levels:** EXCELLENT (85+), GOOD (70-84), FAIR (50-69), POOR (<50)
 
@@ -105,7 +88,7 @@ The corpus analyzer also computes these metrics (available in the analysis outpu
 
 ## Auto-Fix (LLM-Powered)
 
-When you run `fix` or `upload` with `--llm-key`, targeted prompts are sent to Claude to fix each detected issue:
+When you run `fix` with `--llm-key`, targeted prompts are sent to Claude to fix each detected issue:
 
 | Issue               | Fix Applied                                             |
 | ------------------- | ------------------------------------------------------- |
@@ -119,7 +102,7 @@ Originals are never modified. Fixed files are written as clean Markdown to the o
 
 ## Knowledge Graph
 
-When LLM analysis runs (`analyze`, `fix`, or `upload` with `--llm-key`), an in-memory knowledge graph is built across all documents automatically.
+When LLM analysis runs (`analyze` or `fix` with `--llm-key`), an in-memory knowledge graph is built across all documents automatically.
 
 The LLM extracts **entities** and **relationships** from each document. Entities are merged into a shared [networkx](https://networkx.org/) directed graph using TF-IDF cosine similarity on character n-grams — this handles morphological variation ("Budget" matches "Budgeting"), word reordering, and typos.
 
@@ -129,7 +112,7 @@ The LLM extracts **entities** and **relationships** from each document. Entities
 
 ### Graph analysis
 
-- **Spectral clustering** — deterministic document grouping using the eigengap heuristic on the TF-IDF similarity matrix (replaces non-deterministic Louvain for document clustering)
+- **Spectral clustering** — deterministic document grouping using the eigengap heuristic on the TF-IDF similarity matrix
 - **PageRank** — ranks entities by structural importance for folder naming
 - **Betweenness centrality** — identifies bridge entities connecting topic clusters
 - **Bipartite projection** — document-document similarity via shared entities (blended with TF-IDF similarity)
@@ -143,7 +126,7 @@ The LLM extracts **entities** and **relationships** from each document. Entities
 
 ## Folder Recommendations
 
-The tool proposes a folder structure using a 4-tier priority: graph clusters + LLM naming (best), LLM-only, graph-only, or heuristic fallback. Since anam.ai uses flat folders, the path hierarchy is encoded into folder names:
+The tool proposes a folder structure using a 4-tier priority: graph clusters + LLM naming (best), LLM-only, graph-only, or heuristic fallback. The path hierarchy is encoded into folder names:
 
 ```
 Engineering - API Design
@@ -153,45 +136,24 @@ Product - User Research
 Onboarding
 ```
 
-## Using Without anam.ai
-
-The `score`, `analyze`, and `fix` commands work independently of anam.ai:
-
-| Command   | anam.ai required? | What you get |
-| --------- | ------------------ | ------------ |
-| `score`   | No                 | RAG readiness scores, corpus analysis metrics |
-| `analyze` | No                 | Knowledge graph, topic clusters, folder recommendations |
-| `fix`     | No                 | Auto-fixed Markdown documents |
-| `upload`  | Yes                | Folder creation, file upload, persona tool attachment |
-
-```bash
-python cli.py score ./my-docs/                                             # check quality
-python cli.py fix ./my-docs/ --llm-key $ANTHROPIC_API_KEY --output ./fixed/ # fix issues
-# upload ./fixed/ to your vector DB of choice
-```
-
 ## RAG Evaluation
 
 Evaluate document quality by testing retrieval + answer generation against questions with known ground truth.
 
 ```bash
-# Local BM25 retrieval (no API needed)
 python eval/run_eval.py rag-files-*/ --llm-key $ANTHROPIC_API_KEY
-
-# anam.ai vector search (uses live KB)
-python eval/run_eval.py rag-files-*/ --llm-key $ANTHROPIC_API_KEY --anam-key $ANAM_API_KEY
 ```
 
 **Metrics:** Retrieval Hit Rate, Context Precision, Faithfulness, Answer Correctness.
 
 ## Supported File Types
 
-| Format | Parsing                                                | Upload to anam.ai |
-| ------ | ------------------------------------------------------ | ----------------- |
-| .docx  | Full (headings, paragraphs, metadata)                  | Yes               |
-| .pdf   | Full (font-based heading detection, paragraph merging) | Yes               |
-| .md    | Full (Markdown heading syntax)                         | Yes               |
-| .txt   | Basic (paragraph splitting)                            | Yes               |
+| Format | Parsing                                                |
+| ------ | ------------------------------------------------------ |
+| .docx  | Full (headings, paragraphs, metadata)                  |
+| .pdf   | Full (font-based heading detection, paragraph merging) |
+| .md    | Full (Markdown heading syntax)                         |
+| .txt   | Basic (paragraph splitting)                            |
 
 ## Project Structure
 
@@ -205,12 +167,12 @@ kb-prep/
 ├── graph_builder.py      # Knowledge graph (networkx) + spectral clustering + PageRank
 ├── fixer.py              # LLM auto-fix engine (graph-aware)
 ├── recommender.py        # Folder recommendation + silhouette validation
-├── anam_client.py        # anam.ai REST API client
+├── anam_client.py        # Upload client (see anam.ai section below)
 ├── prompts.py            # LLM prompt templates
 ├── config.py             # Settings and API key management
 ├── models.py             # All dataclasses
 ├── eval/
-│   ├── run_eval.py       # RAG evaluation (BM25 + anam vector search)
+│   ├── run_eval.py       # RAG evaluation (BM25 + vector search)
 │   └── test-questions.json
 └── tests/
     ├── test_corpus_analyzer.py  # TF-IDF, entropy, coherence, retrieval tests
@@ -229,7 +191,7 @@ kb-prep/
 - `PyMuPDF` — PDF parsing
 - `click` — CLI framework
 - `rich` — terminal formatting
-- `requests` — HTTP client for anam.ai API
+- `requests` — HTTP client
 - `anthropic` — Claude API (only needed for analyze/fix/LLM features)
 - `networkx` — knowledge graph
 - `numpy` — numerical computation
@@ -243,3 +205,52 @@ kb-prep/
 - **Relationship deduplication** — merge duplicate edges and track edge weight/frequency
 - **Configurable thresholds** — expose scoring weights and cluster resolution as config
 - **Export graph** — write the knowledge graph as GraphML, JSON, or DOT
+
+---
+
+## anam.ai Integration
+
+kb-prep includes built-in upload support for [anam.ai](https://anam.ai) knowledge bases. This is optional — all other features work without it.
+
+### Setup
+
+```bash
+export ANAM_API_KEY=your-anam-key
+```
+
+### Upload
+
+```bash
+# Full pipeline: fix + recommend folders + upload
+python cli.py upload ./my-docs/ \
+  --api-key $ANAM_API_KEY \
+  --llm-key $ANTHROPIC_API_KEY
+
+# Dry run (preview without uploading)
+python cli.py upload ./my-docs/ --api-key $ANAM_API_KEY --llm-key $ANTHROPIC_API_KEY --dry-run
+
+# Upload and attach to a persona
+python cli.py upload ./my-docs/ \
+  --api-key $ANAM_API_KEY \
+  --llm-key $ANTHROPIC_API_KEY \
+  --persona-id your-persona-id \
+  --tool-name "Doc Search" \
+  --tool-description "Search documents to answer questions"
+```
+
+### How it works
+
+anam.ai uses direct multipart upload with flat folders (hierarchy encoded in names):
+
+1. **Create folder** — POST to `/v1/knowledge/groups`
+2. **Upload file** — multipart POST to `/v1/knowledge/groups/{id}/documents`
+
+Documents transition from `PROCESSING` → `READY` (~30 seconds). When `--persona-id` is provided, a knowledge tool (type `SERVER_RAG`) is created linking all folders to the persona.
+
+The eval script also supports anam.ai vector search for retrieval evaluation:
+
+```bash
+python eval/run_eval.py rag-files-*/ --llm-key $ANTHROPIC_API_KEY --anam-key $ANAM_API_KEY
+```
+
+**File size limits:** Warns at 25MB, blocks at 50MB.
