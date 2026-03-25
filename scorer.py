@@ -56,14 +56,31 @@ class QualityScorer:
         self._audience_hint = audience
 
     def _parse_audience_range(self) -> tuple[float, float]:
-        """Parse audience hint into a (min_grade, max_grade) reading level range."""
+        """Parse audience hint into a (min_grade, max_grade) reading level range.
+
+        Key distinction: if the audience is *teachers*, the reading level
+        target is adult-level (grade 8-14) regardless of what grade they
+        teach. "K-5 teachers" means teachers of K-5 students, not that
+        the content should be at a K-5 reading level.
+        """
         audience = getattr(self, "_audience_hint", None) or ""
         audience = audience.lower()
+
+        # Teacher/educator content is written at adult reading level
+        is_teacher = bool(re.search(r"\bteacher|educator|instructor|facilitator\b", audience))
+        if is_teacher:
+            return 8.0, 14.0
+
+        # Explicit grade range: "grade 3-6", "grades 4-5"
         m = re.search(r"grade[s]?\s*(\d+)\s*[-–]\s*(\d+)", audience)
         if m:
             return float(m.group(1)), float(m.group(2))
+
+        # K-5 pattern (student-facing)
         if re.search(r"k[-–]?5|kindergarten.{0,20}5th", audience):
             return 3.0, 6.0
+
+        # Named level ranges (student-facing)
         level_ranges = {
             "elementary": (2.0, 6.0),
             "middle school": (6.0, 8.0),
@@ -73,6 +90,7 @@ class QualityScorer:
         for pattern, (lo, hi) in level_ranges.items():
             if pattern in audience:
                 return lo, hi
+
         return 5.0, 9.0
 
     def score(self, doc: ParsedDocument) -> ScoreCard:
