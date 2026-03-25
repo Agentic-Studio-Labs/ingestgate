@@ -41,3 +41,4 @@ rag-files-*/
 kb-prep-*.md
 anam-prep-*.md
 .worktrees/
+.superpowers/
