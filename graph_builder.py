@@ -10,6 +10,8 @@ from collections import defaultdict
 from typing import Optional
 
 import networkx as nx
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 
 from models import (
     ContentAnalysis,
@@ -30,6 +32,9 @@ class KnowledgeGraph:
         self._relationships: list[Relationship] = []
         self._file_entities: dict[str, set[str]] = defaultdict(set)  # file → {entity keys}
         self._cached_components: Optional[list[set]] = None  # cached connected components
+        self._entity_vectorizer = None
+        self._entity_matrix = None
+        self._entity_keys_list: list[str] = []
 
     # ------------------------------------------------------------------
     # Building
@@ -54,6 +59,7 @@ class KnowledgeGraph:
             self._entities[key] = entity
             self._name_index[entity.name.lower().strip()] = key
             self._cached_components = None  # invalidate
+            self._entity_matrix = None  # invalidate cosine index
             self.graph.add_node(
                 key,
                 name=entity.name,
@@ -105,22 +111,31 @@ class KnowledgeGraph:
         )
         self._relationships.append(rel)
 
-    def _find_entity_key(self, name: str) -> Optional[str]:
-        """Find an entity key by name (case-insensitive fuzzy match)."""
+    def _find_entity_key(self, name: str, threshold: float = 0.4) -> Optional[str]:
+        """Find an entity key by name using TF-IDF cosine similarity."""
         normalized = name.lower().strip()
-
         # O(1) exact match via index
         if normalized in self._name_index:
             return self._name_index[normalized]
-
-        # Partial match (name contains or is contained by)
-        # Require minimum length of 8 chars to avoid false positives on short names
-        if len(normalized) >= 8:
-            for norm_name, key in self._name_index.items():
-                if len(norm_name) >= 8 and (normalized in norm_name or norm_name in normalized):
-                    return key
-
+        # Cosine similarity on character n-grams
+        if not self._entities:
+            return None
+        self._rebuild_entity_index()
+        query_vec = self._entity_vectorizer.transform([name])
+        sims = sklearn_cosine_similarity(query_vec, self._entity_matrix)[0]
+        best_idx = sims.argmax()
+        if sims[best_idx] >= threshold:
+            return self._entity_keys_list[best_idx]
         return None
+
+    def _rebuild_entity_index(self):
+        """Rebuild the TF-IDF entity index when entities change."""
+        if self._entity_matrix is not None:
+            return  # already up to date
+        entity_texts = [f"{e.name} {e.description}" for e in self._entities.values()]
+        self._entity_keys_list = list(self._entities.keys())
+        self._entity_vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4))
+        self._entity_matrix = self._entity_vectorizer.fit_transform(entity_texts)
 
     # ------------------------------------------------------------------
     # Querying
@@ -145,14 +160,16 @@ class KnowledgeGraph:
             visited.add(current_key)
 
             node = self.graph.nodes.get(current_key, {})
-            results.append({
-                "entity": node.get("name", current_key),
-                "type": node.get("entity_type", "unknown"),
-                "source_file": node.get("source_file", ""),
-                "description": node.get("description", ""),
-                "path": list(path),
-                "depth": depth,
-            })
+            results.append(
+                {
+                    "entity": node.get("name", current_key),
+                    "type": node.get("entity_type", "unknown"),
+                    "source_file": node.get("source_file", ""),
+                    "description": node.get("description", ""),
+                    "path": list(path),
+                    "depth": depth,
+                }
+            )
 
             # Traverse outgoing edges
             for _, neighbor, data in self.graph.out_edges(current_key, data=True):
@@ -193,11 +210,13 @@ class KnowledgeGraph:
                     continue
                 if key in other_keys:
                     entity = self._entities[key]
-                    cross_refs.append({
-                        "entity": entity.name,
-                        "type": entity.entity_type,
-                        "also_in": other_file,
-                    })
+                    cross_refs.append(
+                        {
+                            "entity": entity.name,
+                            "type": entity.entity_type,
+                            "also_in": other_file,
+                        }
+                    )
 
         return cross_refs
 
@@ -237,10 +256,7 @@ class KnowledgeGraph:
         for component in components:
             if len(component) < 2:
                 continue
-            names = [
-                self.graph.nodes[key].get("name", key)
-                for key in component
-            ]
+            names = [self.graph.nodes[key].get("name", key) for key in component]
             clusters.append(sorted(names))
 
         # Sort by size (largest first)
