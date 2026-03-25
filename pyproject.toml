@@ -61,4 +61,17 @@ select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-collect_ignore_glob = ["test-data/corpora/*"]
+filterwarnings = [
+    "ignore::DeprecationWarning:importlib._bootstrap",
+    "ignore:Graph is not fully connected:UserWarning:sklearn",
+]
+markers = [
+    "layer1: Layer 1 information-theoretic tests",
+    "layer2: Layer 2 spectral graph tests",
+    "layer3: Layer 3 semantic chunking tests",
+    "layer4: Layer 4 retrieval tests",
+    "layer5: Layer 5 end-to-end RAG quality tests",
+    "cross_layer: Cross-layer integration tests",
+    "slow: Slow performance benchmark tests",
+    "timeout: Test timeout marker",
+]
