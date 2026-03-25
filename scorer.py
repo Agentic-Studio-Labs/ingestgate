@@ -288,7 +288,6 @@ class QualityScorer:
         total_body = len(doc.body_paragraphs)
         if total_body > 0:
             short_pct = too_short / total_body
-            long_pct = too_long / total_body
             if short_pct > 0.5:
                 issues.append(
                     Issue(
@@ -865,7 +864,10 @@ class QualityScorer:
                             severity=Severity.INFO,
                             category="knowledge_completeness",
                             message=f'Referenced "{entity.name}" but it\'s not defined in any document',
-                            fix="Either define this term/concept in the document or ensure the referenced document is included in the corpus.",
+                            fix=(
+                                "Either define this term/concept in the document or ensure "
+                                "the referenced document is included in the corpus."
+                            ),
                         )
                     )
 
@@ -889,7 +891,10 @@ class QualityScorer:
                     severity=Severity.INFO,
                     category="knowledge_completeness",
                     message="Document has no cross-references to other documents in the corpus",
-                    fix="This document is isolated. Consider adding contextual links or ensuring related documents are in the corpus.",
+                    fix=(
+                        "This document is isolated. Consider adding contextual links "
+                        "or ensuring related documents are in the corpus."
+                    ),
                 )
             )
 
