@@ -73,7 +73,11 @@ def setup_squad(manifest: dict):
 
 
 def setup_beir(manifest: dict):
-    """BEIR datasets — SciFact, NFCorpus, TREC-COVID."""
+    """BEIR datasets — SciFact, NFCorpus, TREC-COVID.
+
+    Uses BeIR/{name}-generated-queries which contains corpus text + queries
+    in a single split (the old BeIR/{name} dataset scripts are deprecated).
+    """
     from datasets import load_dataset
 
     for dataset_name in ["scifact", "nfcorpus", "trec-covid"]:
@@ -85,59 +89,80 @@ def setup_beir(manifest: dict):
         out_dir = CORPORA_DIR / "beir" / dataset_name
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Corpus
-        try:
-            corpus_ds = load_dataset(f"BeIR/{dataset_name}", "corpus", split="corpus")
-        except Exception:
-            corpus_ds = load_dataset(f"BeIR/{dataset_name}", split="corpus")
+        # Load via generated-queries variant (has corpus text + query per row)
+        ds = load_dataset(f"BeIR/{dataset_name}-generated-queries", split="train")
 
+        # Extract unique corpus documents
+        seen_ids = set()
         corpus_file = out_dir / "corpus.jsonl"
-        with open(corpus_file, "w") as f:
-            for row in corpus_ds:
-                f.write(
-                    json.dumps({"_id": row.get("_id", ""), "title": row.get("title", ""), "text": row.get("text", "")})
-                    + "\n"
-                )
+        queries_file = out_dir / "queries.jsonl"
+        with open(corpus_file, "w") as cf, open(queries_file, "w") as qf:
+            for row in ds:
+                doc_id = row.get("_id", "")
+                if doc_id not in seen_ids:
+                    seen_ids.add(doc_id)
+                    cf.write(
+                        json.dumps(
+                            {
+                                "_id": doc_id,
+                                "title": row.get("title", ""),
+                                "text": row.get("text", ""),
+                            }
+                        )
+                        + "\n"
+                    )
+                # Each row also has a generated query
+                query = row.get("query", "")
+                if query:
+                    qf.write(
+                        json.dumps(
+                            {
+                                "_id": doc_id,
+                                "text": query,
+                            }
+                        )
+                        + "\n"
+                    )
 
-        # Queries
-        try:
-            queries_ds = load_dataset(f"BeIR/{dataset_name}", "queries", split="queries")
-            queries_file = out_dir / "queries.jsonl"
-            with open(queries_file, "w") as f:
-                for row in queries_ds:
-                    f.write(json.dumps({"_id": row.get("_id", ""), "text": row.get("text", "")}) + "\n")
-        except Exception as e:
-            print(f"    Warning: could not load queries for {dataset_name}: {e}")
-
-        manifest[key] = {"status": "ready", "rows": len(corpus_ds), "date": datetime.now().isoformat()}
-        print(f"  {key}: {len(corpus_ds)} documents")
+        manifest[key] = {"status": "ready", "rows": len(seen_ids), "date": datetime.now().isoformat()}
+        print(f"  {key}: {len(seen_ids)} documents, {len(ds)} queries")
 
 
 def setup_cuad(manifest: dict):
-    """CUAD — contract understanding dataset with clause-level QA."""
+    """CUAD — contract understanding dataset with clause-level QA.
+
+    Downloads the SQuAD-format JSON directly from HuggingFace since the
+    HF datasets library can't load the restructured repo (PDF-based).
+    """
     name = "cuad"
     if _is_ready(name, manifest):
         print(f"  {name}: already cached, skipping")
         return
-    from datasets import load_dataset
+    import requests
 
     out_dir = CORPORA_DIR / name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    ds = load_dataset("theatticusproject/cuad", split="test")
+    url = "https://huggingface.co/datasets/theatticusproject/cuad/resolve/main/CUAD_v1/CUAD_v1.json"
+    resp = requests.get(url, timeout=120)
+    resp.raise_for_status()
+    data = resp.json()
+
     records = []
     seen_contexts = set()
-    for row in ds:
-        ctx = row["context"]
-        if ctx not in seen_contexts:
-            seen_contexts.add(ctx)
-            records.append(
-                {
-                    "id": f"cuad_{len(records)}",
-                    "text": ctx,
-                    "title": row.get("title", ""),
-                }
-            )
+    for article in data.get("data", []):
+        title = article.get("title", "")
+        for para in article.get("paragraphs", []):
+            ctx = para.get("context", "")
+            if ctx and ctx not in seen_contexts:
+                seen_contexts.add(ctx)
+                records.append(
+                    {
+                        "id": f"cuad_{len(records)}",
+                        "text": ctx,
+                        "title": title,
+                    }
+                )
 
     out_file = out_dir / "data.jsonl"
     with open(out_file, "w") as f:
