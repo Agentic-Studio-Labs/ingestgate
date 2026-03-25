@@ -343,6 +343,24 @@ class KnowledgeGraph:
     def is_empty(self) -> bool:
         return self.graph.number_of_nodes() == 0
 
+    # ------------------------------------------------------------------
+    # Centrality / ranking
+    # ------------------------------------------------------------------
+
+    def get_pagerank(self, alpha: float = 0.85) -> dict[str, float]:
+        """Rank entities by PageRank centrality."""
+        if self.graph.number_of_nodes() == 0:
+            return {}
+        return nx.pagerank(self.graph, alpha=alpha)
+
+    def get_bridge_entities(self, top_n: int = 5) -> list[tuple[str, float]]:
+        """Find bridge entities (high betweenness centrality)."""
+        if self.graph.number_of_nodes() < 3:
+            return []
+        bc = nx.betweenness_centrality(self.graph)
+        ranked = sorted(bc.items(), key=lambda x: -x[1])[:top_n]
+        return [(self._entities[k].name if k in self._entities else k, v) for k, v in ranked if v > 0]
+
 
 # ------------------------------------------------------------------
 # Module-level spectral clustering utility

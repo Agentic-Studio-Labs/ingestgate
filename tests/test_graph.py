@@ -265,3 +265,28 @@ class TestSpectralClustering:
         clusters_2 = spectral_cluster(sim)
         assert clusters_1 == clusters_2, "Should be deterministic"
         assert len(clusters_1) == 2, f"Should find 2 clusters, got {len(clusters_1)}"
+
+
+# ------------------------------------------------------------------
+# 5. PageRank + bridge entities
+# ------------------------------------------------------------------
+
+
+def test_pagerank_returns_rankings():
+    graph = KnowledgeGraph()
+    leaf_names = ["Budgeting", "Saving", "Credit", "Insurance", "Investing"]
+    for name in leaf_names:
+        graph._add_entity(Entity(name=name, entity_type="concept", source_file="a.md"), "a.md")
+    graph._add_entity(Entity(name="Financial Literacy", entity_type="concept", source_file="a.md"), "a.md")
+    for name in leaf_names:
+        graph._add_relationship(
+            Relationship(source="Financial Literacy", target=name, rel_type="covers", source_file="a.md")
+        )
+    rankings = graph.get_pagerank()
+    assert len(rankings) > 0
+    # PageRank rewards nodes with many inbound edges; the 5 leaf concepts each
+    # receive a link from "Financial Literacy", so they rank above it.
+    top_entity = max(rankings, key=rankings.get)
+    top_entity_name = graph._entities[top_entity].name if top_entity in graph._entities else top_entity
+    leaf_keys = {e.key for e in graph._entities.values() if e.name in leaf_names}
+    assert top_entity in leaf_keys, f"Top PageRank entity should be a leaf concept, got {top_entity_name!r}"
