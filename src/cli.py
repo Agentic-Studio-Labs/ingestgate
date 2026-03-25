@@ -82,11 +82,30 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
                 console.print(f"[red]Error parsing {file_path}: {e}[/red]")
             progress.advance(task)
 
-    corpus_analysis = build_corpus_analysis(docs)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        transient=True,
+    ) as progress:
+        progress.add_task("Analyzing corpus...", total=None)
+        corpus_analysis = build_corpus_analysis(docs)
+
     scorer = QualityScorer(
         corpus_analysis=corpus_analysis,
     )
-    cards = [scorer.score(doc) for doc in docs]
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Scoring documents...", total=len(docs))
+        cards = []
+        for doc in docs:
+            cards.append(scorer.score(doc))
+            progress.advance(task)
 
     if json_out:
         _print_json(cards)
