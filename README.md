@@ -39,8 +39,8 @@ python cli.py upload ./my-docs/ \
   --api-key $ANAM_API_KEY \
   --llm-key $ANTHROPIC_API_KEY \
   --persona-id your-persona-id \
-  --tool-name "Lesson Search" \
-  --tool-description "Search lesson plans to answer questions"
+  --tool-name "Doc Search" \
+  --tool-description "Search documents to answer questions"
 ```
 
 Set environment variables to avoid passing keys every time:
@@ -146,11 +146,11 @@ The LLM extracts **entities** and **relationships** from each document. Entities
 The tool proposes a folder structure using a 4-tier priority: graph clusters + LLM naming (best), LLM-only, graph-only, or heuristic fallback. Since anam.ai uses flat folders, the path hierarchy is encoded into folder names:
 
 ```
-Curriculum - Grade 3 Math
-Curriculum - Grade 4 Science
-Teacher Resources - Lesson Plans
-Teacher Resources - Rubrics
-Parent Guides
+Engineering - API Design
+Engineering - Architecture
+Product - Requirements
+Product - User Research
+Onboarding
 ```
 
 ## Using Without anam.ai
