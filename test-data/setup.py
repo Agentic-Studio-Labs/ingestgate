@@ -458,6 +458,240 @@ def setup_leipzig_er(manifest: dict):
     print(f"  {name}: {total} datasets downloaded")
 
 
+def setup_score_bench(manifest: dict):
+    """SCORE-Bench — 224 real-world PDFs with text annotations."""
+    name = "score_bench"
+    if _is_ready(name, manifest):
+        print(f"  {name}: already cached, skipping")
+        return
+    import requests
+
+    out_dir = CORPORA_DIR / name
+    pdf_dir = out_dir / "pdfs"
+    anno_dir = out_dir / "annotations"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    anno_dir.mkdir(parents=True, exist_ok=True)
+
+    base = "https://huggingface.co/datasets/unstructuredio/SCORE-Bench/resolve/main"
+
+    # List PDF files from src/
+    api_resp = requests.get(
+        "https://huggingface.co/api/datasets/unstructuredio/SCORE-Bench/tree/main/src",
+        timeout=30,
+    )
+    api_resp.raise_for_status()
+    pdf_files = [f["path"] for f in api_resp.json() if f["path"].endswith(".pdf")]
+
+    # Sample 30 for manageable download
+    pdf_files = pdf_files[:30]
+
+    downloaded = 0
+    for pdf_path in pdf_files:
+        filename = pdf_path.split("/")[-1]
+        local_pdf = pdf_dir / filename
+        if local_pdf.exists():
+            downloaded += 1
+            continue
+
+        # Download PDF
+        try:
+            resp = requests.get(f"{base}/{pdf_path}", timeout=60)
+            resp.raise_for_status()
+            local_pdf.write_bytes(resp.content)
+        except Exception as e:
+            print(f"    Warning: failed to download {filename}: {e}")
+            continue
+
+        # Download matching annotation
+        anno_name = f"{filename}__uns-plaintext-v1.0.0__0x0001__0.txt"
+        try:
+            resp = requests.get(f"{base}/content-gt/{anno_name}", timeout=30)
+            if resp.status_code == 200:
+                (anno_dir / anno_name).write_text(resp.text)
+        except Exception:
+            pass
+
+        downloaded += 1
+
+    manifest[name] = {"status": "ready", "pdfs": downloaded, "date": datetime.now().isoformat()}
+    print(f"  {name}: {downloaded} PDFs downloaded")
+
+
+def setup_omnidocbench(manifest: dict):
+    """OmniDocBench — synthetic text documents built from layout annotations.
+
+    The HF repo contains page images (PNG) and a JSON annotation file with
+    per-element text and category_type.  Since DocumentParser cannot handle
+    PNGs, we synthesise a .txt document per source PDF stem by concatenating
+    the annotation text blocks in reading order.  The annotation metadata
+    (category_type sequence) is preserved in a separate JSONL file for use
+    by the boundary Pk test.
+    """
+    name = "omnidocbench"
+    if _is_ready(name, manifest):
+        print(f"  {name}: already cached, skipping")
+        return
+    import re
+
+    import requests
+
+    out_dir = CORPORA_DIR / name
+    txt_dir = out_dir / "txts"
+    txt_dir.mkdir(parents=True, exist_ok=True)
+
+    base = "https://huggingface.co/datasets/opendatalab/OmniDocBench/resolve/main"
+
+    # Download annotations JSON
+    anno_file = out_dir / "annotations.json"
+    if not anno_file.exists():
+        resp = requests.get(f"{base}/OmniDocBench.json", timeout=120)
+        resp.raise_for_status()
+        anno_file.write_bytes(resp.content)
+
+    annotations = json.loads(anno_file.read_text())
+
+    # Group annotation pages by source document stem.
+    # image_path patterns:
+    #   {stem}.pdf_{page}.jpg  or  {stem}_page_{page}.jpg/png
+    def _doc_stem(image_path: str) -> str:
+        m = re.match(r"^(.+\.pdf)_\d+\.", image_path)
+        if m:
+            return m.group(1)
+        m2 = re.match(r"^(.+?)_page_\d+\.", image_path)
+        if m2:
+            return m2.group(1) + ".pdf"
+        return image_path
+
+    doc_pages: dict[str, list[dict]] = {}
+    for anno in annotations:
+        image_path = anno.get("page_info", {}).get("image_path", "")
+        if not image_path:
+            continue
+        stem = _doc_stem(image_path)
+        doc_pages.setdefault(stem, []).append(anno)
+
+    # Filter to docs with Latin text content
+    latin_docs = []
+    for stem, pages in doc_pages.items():
+        for page in pages:
+            for det in page.get("layout_dets", []):
+                text = det.get("text", "")
+                if text and any(c.isascii() and c.isalpha() for c in text):
+                    latin_docs.append(stem)
+                    break
+            else:
+                continue
+            break
+
+    # Sample up to 30 documents
+    latin_docs = list(dict.fromkeys(latin_docs))[:30]  # deduplicate, preserve order
+
+    boundary_records = []
+    built = 0
+    for stem in latin_docs:
+        safe_name = re.sub(r"[^\w.-]", "_", stem)
+        txt_path = txt_dir / f"{safe_name}.txt"
+
+        pages = sorted(doc_pages[stem], key=lambda a: a.get("page_info", {}).get("page_no") or 0)
+
+        lines: list[str] = []
+        category_seq: list[str] = []
+        for page in pages:
+            dets = sorted(page.get("layout_dets", []), key=lambda d: d.get("order") or 0)
+            for det in dets:
+                text = det.get("text", "").strip()
+                cat = det.get("category_type", "text")
+                if not text:
+                    continue
+                lines.append(text)
+                category_seq.append(cat)
+
+        if not lines:
+            continue
+
+        if not txt_path.exists():
+            txt_path.write_text("\n\n".join(lines), encoding="utf-8")
+
+        boundary_records.append({"stem": stem, "safe_name": safe_name, "categories": category_seq})
+        built += 1
+
+    # Always (re)write boundary metadata so it stays in sync with txt files
+    boundary_file = out_dir / "boundaries.jsonl"
+    with open(boundary_file, "w") as f:
+        for rec in boundary_records:
+            f.write(json.dumps(rec) + "\n")
+
+    manifest[name] = {"status": "ready", "docs": built, "date": datetime.now().isoformat()}
+    print(f"  {name}: {built} synthetic documents built from annotations")
+
+
+def setup_kleister_nda(manifest: dict):
+    """Kleister NDA — 540 real NDA PDFs with entity annotations."""
+    name = "kleister_nda"
+    if _is_ready(name, manifest):
+        print(f"  {name}: already cached, skipping")
+        return
+    import requests
+
+    out_dir = CORPORA_DIR / name
+    pdf_dir = out_dir / "pdfs"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    gh_base = "https://raw.githubusercontent.com/applicaai/kleister-nda/master"
+    gh_api = "https://api.github.com/repos/applicaai/kleister-nda/contents"
+
+    # Download ground truth TSV
+    tsv_file = out_dir / "in-header.tsv"
+    if not tsv_file.exists():
+        resp = requests.get(f"{gh_base}/in-header.tsv", timeout=30)
+        resp.raise_for_status()
+        tsv_file.write_text(resp.text)
+
+    # Download train and dev-0 ground truth splits
+    for split in ["train", "dev-0"]:
+        split_dir = out_dir / split
+        split_dir.mkdir(parents=True, exist_ok=True)
+        for fname in ["expected.tsv", "in.tsv"]:
+            local = split_dir / fname
+            if not local.exists():
+                try:
+                    resp = requests.get(f"{gh_base}/{split}/{fname}", timeout=30)
+                    if resp.status_code == 200:
+                        local.write_text(resp.text)
+                except Exception:
+                    pass
+
+    # List and download PDFs from documents/
+    try:
+        resp = requests.get(f"{gh_api}/documents", timeout=30)
+        resp.raise_for_status()
+        pdf_entries = [f for f in resp.json() if f["name"].endswith(".pdf")]
+    except Exception as e:
+        print(f"    Warning: could not list documents: {e}")
+        pdf_entries = []
+
+    # Sample 50 PDFs (full set is 540, too many for quick eval)
+    pdf_entries = pdf_entries[:50]
+
+    downloaded = 0
+    for entry in pdf_entries:
+        filename = entry["name"]
+        local_pdf = pdf_dir / filename
+        if local_pdf.exists():
+            downloaded += 1
+            continue
+        try:
+            resp = requests.get(entry["download_url"], timeout=60)
+            resp.raise_for_status()
+            local_pdf.write_bytes(resp.content)
+            downloaded += 1
+        except Exception as e:
+            print(f"    Warning: failed to download {filename}: {e}")
+
+    manifest[name] = {"status": "ready", "pdfs": downloaded, "date": datetime.now().isoformat()}
+    print(f"  {name}: {downloaded} PDFs downloaded")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -473,6 +707,9 @@ ALL_SETUP_FNS = [
     ("STS Benchmark", setup_sts),
     ("arXiv Sample", setup_arxiv_sample),
     ("Leipzig ER", setup_leipzig_er),
+    ("SCORE-Bench", setup_score_bench),
+    ("OmniDocBench", setup_omnidocbench),
+    ("Kleister NDA", setup_kleister_nda),
 ]
 
 

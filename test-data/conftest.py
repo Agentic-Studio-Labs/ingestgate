@@ -154,6 +154,71 @@ def leipzig_er_data():
     return datasets
 
 
+@pytest.fixture(scope="session")
+def score_bench_data():
+    """SCORE-Bench PDFs and annotations."""
+    pdf_dir = CORPORA_DIR / "score_bench" / "pdfs"
+    anno_dir = CORPORA_DIR / "score_bench" / "annotations"
+    if not pdf_dir.exists() or not any(pdf_dir.glob("*.pdf")):
+        pytest.skip("SCORE-Bench not downloaded. Run setup.py first.")
+    pdfs = sorted(pdf_dir.glob("*.pdf"))
+    annotations = {}
+    for pdf in pdfs:
+        anno_name = f"{pdf.name}__uns-plaintext-v1.0.0__0x0001__0.txt"
+        anno_path = anno_dir / anno_name
+        if anno_path.exists():
+            annotations[pdf.name] = anno_path.read_text()
+    return {"pdfs": pdfs, "annotations": annotations}
+
+
+@pytest.fixture(scope="session")
+def omnidocbench_data():
+    """OmniDocBench synthetic text documents and layout boundary metadata."""
+    base_dir = CORPORA_DIR / "omnidocbench"
+    txt_dir = base_dir / "txts"
+    boundary_file = base_dir / "boundaries.jsonl"
+    if not txt_dir.exists() or not any(txt_dir.glob("*.txt")):
+        pytest.skip("OmniDocBench not prepared. Run setup.py first.")
+    docs = sorted(txt_dir.glob("*.txt"))
+    boundaries = []
+    if boundary_file.exists():
+        for line in boundary_file.read_text().strip().split("\n"):
+            line = line.strip()
+            if line:
+                boundaries.append(json.loads(line))
+    return {"docs": docs, "boundaries": boundaries}
+
+
+@pytest.fixture(scope="session")
+def kleister_nda_data():
+    """Kleister NDA PDFs and entity annotations."""
+    base_dir = CORPORA_DIR / "kleister_nda"
+    pdf_dir = base_dir / "pdfs"
+    if not pdf_dir.exists() or not any(pdf_dir.glob("*.pdf")):
+        pytest.skip("Kleister NDA not downloaded. Run setup.py first.")
+    pdfs = sorted(pdf_dir.glob("*.pdf"))
+
+    # Load ground truth entities from train/expected.tsv.
+    # Each row corresponds to one document (in dataset order).
+    # Entity values use underscores for spaces (e.g. Nike_Inc. → Nike Inc.).
+    entity_rows: list[dict[str, str]] = []
+    tsv_path = base_dir / "train" / "expected.tsv"
+    if tsv_path.exists():
+        for line in tsv_path.read_text().strip().split("\n"):
+            parts = line.strip().split("\t")
+            if len(parts) >= 1:
+                kv_pairs = {}
+                for part in parts[0].split(" "):
+                    if "=" in part:
+                        k, v = part.split("=", 1)
+                        # Normalise: replace underscores with spaces
+                        kv_pairs[k] = v.replace("_", " ")
+                if kv_pairs:
+                    entity_rows.append(kv_pairs)
+
+    return {"pdfs": pdfs, "entity_rows": entity_rows}
+
+
 # ---------------------------------------------------------------------------
 # TF-IDF fixtures
 # ---------------------------------------------------------------------------
