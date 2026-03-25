@@ -133,8 +133,8 @@ def analyze(
     folder_hints: str,
 ):
     """Score documents + LLM content analysis and folder recommendation."""
-    from analyzer import ContentAnalyzer
-    from recommender import FolderRecommender, format_folder_tree
+    from .analyzer import ContentAnalyzer
+    from .recommender import FolderRecommender, format_folder_tree
 
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
@@ -252,10 +252,10 @@ def fix(
     """Score + auto-fix issues, output improved Markdown files."""
     from datetime import datetime
 
-    from analyzer import ContentAnalyzer
-    from fixer import DocumentFixer
-    from parser import to_markdown
-    from recommender import FolderRecommender, format_folder_tree
+    from .analyzer import ContentAnalyzer
+    from .fixer import DocumentFixer
+    from .parser import to_markdown
+    from .recommender import FolderRecommender, format_folder_tree
 
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
@@ -455,10 +455,10 @@ def upload(
     folder_hints: str,
 ):
     """Full pipeline: score → analyze → fix → recommend folders → upload."""
-    from analyzer import ContentAnalyzer
-    from anam_client import AnamClient
-    from fixer import DocumentFixer
-    from recommender import FolderRecommender, format_folder_tree
+    from .analyzer import ContentAnalyzer
+    from .anam_client import AnamClient
+    from .fixer import DocumentFixer
+    from .recommender import FolderRecommender, format_folder_tree
 
     hints_text = Path(folder_hints).read_text().strip() if folder_hints else ""
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
@@ -501,7 +501,7 @@ def upload(
         _print_graph_summary(graph)
     else:
         console.print("\n[dim]Step 2: Skipped (no --llm-key provided)[/dim]")
-        from models import ContentAnalysis
+        from .models import ContentAnalysis
 
         analyses = [ContentAnalysis() for _ in docs]
 
@@ -676,7 +676,7 @@ def _normalize_quote_keys(d: dict[str, str]) -> dict[str, str]:
 
 def _recommendation_from_disk(base_path: str, files: list[str]) -> "FolderRecommendation":
     """Build a FolderRecommendation from existing subfolder layout on disk."""
-    from models import FolderNode, FolderRecommendation
+    from .models import FolderNode, FolderRecommendation
 
     base = Path(base_path).resolve()
     root = FolderNode(name="Knowledge Base", description="Root knowledge base container")
@@ -985,7 +985,7 @@ def _report_graph(graph) -> list[str]:
 
 def _report_recommendations(recommendation) -> list[str]:
     """Folder structure + file assignments section."""
-    from recommender import format_folder_tree
+    from .recommender import format_folder_tree
 
     lines: list[str] = []
     if not recommendation:
