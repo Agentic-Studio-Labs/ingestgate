@@ -1,7 +1,7 @@
 """Folder structure recommendation engine.
 
-Uses LLM analysis results to propose an anam.ai knowledge base
-folder hierarchy with document assignments.
+Uses LLM analysis results to propose a knowledge base folder
+hierarchy with document assignments.
 """
 
 import json
@@ -43,7 +43,7 @@ def _detect_format_duplicates(docs: list[ParsedDocument]) -> dict[str, str]:
 
 
 class FolderRecommender:
-    """Recommend anam.ai KB folder structure based on content analysis.
+    """Recommend folder structure based on content analysis.
 
     Uses a knowledge graph (when available) for graph-based community
     detection, falling back to LLM or heuristic approaches.
@@ -203,6 +203,12 @@ class FolderRecommender:
             for f in unassigned:
                 assignments[f] = "General"
 
+        # Propagate duplicate assignments
+        duplicates = _detect_format_duplicates(docs)
+        for dup, primary in duplicates.items():
+            if primary in assignments:
+                assignments[dup] = assignments[primary]
+
         return FolderRecommendation(root=root, file_assignments=assignments)
 
     # ------------------------------------------------------------------
@@ -300,6 +306,12 @@ class FolderRecommender:
                 for doc, _ in items:
                     assignments[doc.metadata.filename] = domain.title()
                     domain_node.document_files.append(doc.metadata.filename)
+
+        # Propagate duplicate assignments
+        duplicates = _detect_format_duplicates(docs)
+        for dup, primary in duplicates.items():
+            if primary in assignments:
+                assignments[dup] = assignments[primary]
 
         return FolderRecommendation(root=root, file_assignments=assignments)
 

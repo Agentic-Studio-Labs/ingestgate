@@ -158,7 +158,7 @@ def analyze(
 ):
     """Score documents + LLM content analysis and folder recommendation."""
     from .analyzer import ContentAnalyzer
-    from .export import write_manifest, write_sidecar
+    from .export import build_manifest_data, write_manifest, write_sidecar
     from .recommender import FolderRecommender, format_folder_tree
 
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
