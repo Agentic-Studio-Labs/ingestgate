@@ -814,14 +814,27 @@ def _report_scores(cards: list[ScoreCard], detail: bool) -> list[str]:
     lines.append(f"**Average score:** {avg_score:.1f}")
     lines.append("")
 
-    parse_fidelity_files: list[str] = []
+    parse_fidelity_warning_files: list[str] = []
+    parse_fidelity_note_files: list[str] = []
     for card in cards:
-        if any("Low parse fidelity" in issue.message for issue in card.all_issues):
-            parse_fidelity_files.append(Path(card.file_path).name)
-    if parse_fidelity_files:
-        lines.append(f"**Parse fidelity warnings:** {len(parse_fidelity_files)} file(s)")
+        for issue in card.all_issues:
+            if "Low parse fidelity" not in issue.message:
+                continue
+            filename = Path(card.file_path).name
+            if issue.severity.value in {"warning", "critical"}:
+                parse_fidelity_warning_files.append(filename)
+            else:
+                parse_fidelity_note_files.append(filename)
+    if parse_fidelity_warning_files:
+        lines.append(f"**Parse fidelity warnings:** {len(parse_fidelity_warning_files)} file(s)")
         lines.append("")
-        for filename in parse_fidelity_files:
+        for filename in parse_fidelity_warning_files:
+            lines.append(f"- {filename}")
+        lines.append("")
+    if parse_fidelity_note_files:
+        lines.append(f"**Parse fidelity notes (expected sparse templates): {len(parse_fidelity_note_files)} file(s)**")
+        lines.append("")
+        for filename in parse_fidelity_note_files:
             lines.append(f"- {filename}")
         lines.append("")
 

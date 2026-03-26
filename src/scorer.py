@@ -629,12 +629,21 @@ class QualityScorer:
         total_words = sum(p.word_count for p in doc.paragraphs)
         file_kb = doc.metadata.file_size_bytes / 1024
         if total_words < 120 and len(doc.body_paragraphs) < 5 and file_kb > 20:
+            template_like = self._is_template_like_document(doc)
+            if template_like:
+                message = f"Low parse fidelity (template-like document): only {total_words} words extracted from {file_kb:.0f} KB file"
+                fix = "Likely expected for forms/trackers/rubrics. Verify extraction quality visually."
+                severity = Severity.INFO
+            else:
+                message = f"Low parse fidelity: only {total_words} words extracted from {file_kb:.0f} KB file"
+                fix = "Document may contain tables, text boxes, or embedded content that was not fully extracted."
+                severity = Severity.WARNING
             issues.append(
                 Issue(
-                    severity=Severity.WARNING,
+                    severity=severity,
                     category="structure",
-                    message=f"Low parse fidelity: only {total_words} words extracted from {file_kb:.0f} KB file",
-                    fix="Document may contain tables, text boxes, or embedded content that was not fully extracted.",
+                    message=message,
+                    fix=fix,
                 )
             )
 
@@ -699,6 +708,24 @@ class QualityScorer:
             weight=0.10,
             issues=issues,
         )
+
+    @staticmethod
+    def _is_template_like_document(doc: ParsedDocument) -> bool:
+        name = doc.metadata.filename.lower()
+        name_markers = ("tracker", "rubric", "template", "worksheet", "handout")
+        if any(marker in name for marker in name_markers):
+            return True
+
+        body = doc.body_paragraphs
+        if not body:
+            return False
+        short_labels = 0
+        for para in body:
+            text = para.text.strip()
+            words = len(text.split())
+            if words <= 4 and (text.endswith(":") or re.fullmatch(r"[A-Za-z0-9 ]{1,20}", text)):
+                short_labels += 1
+        return (short_labels / len(body)) >= 0.5
 
     # ------------------------------------------------------------------
     # 8. File Size (bonus — doesn't count toward weighted score but flags issues)

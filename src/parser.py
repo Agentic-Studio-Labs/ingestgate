@@ -105,12 +105,7 @@ class DocumentParser:
                 for tr in element.findall(qn("w:tr")):
                     seen_in_row: set[str] = set()
                     for tc in tr.findall(qn("w:tc")):
-                        for p in tc.findall(qn("w:p")):
-                            runs = p.findall(qn("w:r"))
-                            text = "".join(
-                                r.text for r in (run.find(qn("w:t")) for run in runs) if r is not None and r.text
-                            )
-                            text = text.strip()
+                        for text in self._extract_docx_cell_texts(tc, qn):
                             if not text:
                                 continue
                             # Deduplicate merged cells (same text in same row)
@@ -198,6 +193,7 @@ class DocumentParser:
                     idx += 1
 
         paragraphs = self._filter_pdf_noise(paragraphs)
+        paragraphs = self._merge_split_pdf_headings(paragraphs)
         # Merge consecutive body paragraphs that are likely the same paragraph
         paragraphs = self._merge_pdf_paragraphs(paragraphs)
 
@@ -218,6 +214,23 @@ class DocumentParser:
             paragraphs=paragraphs,
             heading_tree=heading_tree,
         )
+
+    @staticmethod
+    def _extract_docx_cell_texts(tc, qn) -> list[str]:
+        """Extract paragraph text from a DOCX table cell with run-level fallback."""
+        texts: list[str] = []
+        for p in tc.findall(qn("w:p")):
+            parts: list[str] = []
+            for node in p.iter():
+                tag = node.tag.split("}")[-1] if "}" in node.tag else node.tag
+                if tag == "t" and node.text:
+                    parts.append(node.text)
+                elif tag in {"tab", "br", "cr"}:
+                    parts.append(" ")
+            text = " ".join("".join(parts).split())
+            if text:
+                texts.append(text)
+        return texts
 
     @staticmethod
     def _filter_pdf_noise(paragraphs: list[Paragraph]) -> list[Paragraph]:
@@ -247,6 +260,45 @@ class DocumentParser:
             )
 
         return [Paragraph(text=p.text, level=p.level, style=p.style, index=i) for i, p in enumerate(filtered)]
+
+    @staticmethod
+    def _merge_split_pdf_headings(paragraphs: list[Paragraph]) -> list[Paragraph]:
+        """Join adjacent heading lines that are likely a split title."""
+        if not paragraphs:
+            return []
+
+        merged: list[Paragraph] = []
+        i = 0
+        while i < len(paragraphs):
+            current = paragraphs[i]
+            if not current.is_heading:
+                merged.append(current)
+                i += 1
+                continue
+
+            text = current.text
+            j = i + 1
+            while j < len(paragraphs):
+                nxt = paragraphs[j]
+                if not DocumentParser._should_merge_pdf_heading_lines(text, current.level, nxt):
+                    break
+                text = f"{text} {nxt.text}".strip()
+                j += 1
+
+            merged.append(Paragraph(text=text, level=current.level, style=current.style, index=current.index))
+            i = j
+
+        return [Paragraph(text=p.text, level=p.level, style=p.style, index=i) for i, p in enumerate(merged)]
+
+    @staticmethod
+    def _should_merge_pdf_heading_lines(current_text: str, current_level: int, next_para: Paragraph) -> bool:
+        if not next_para.is_heading or next_para.level != current_level:
+            return False
+        if current_text.endswith((".", "!", "?", ":", ";")):
+            return False
+        current_words = len(current_text.split())
+        next_words = len(next_para.text.split())
+        return (current_words + next_words) <= 14
 
     @staticmethod
     def _estimate_heading_level(font_size: float, is_bold: bool) -> int:
@@ -286,9 +338,8 @@ class DocumentParser:
                     index=p.index,
                 )
             else:
-                # Merge if the line looks like a continuation (no sentence-ending punctuation
-                # at the end of current, or current is short)
-                if not current.text.endswith((".", "!", "?", ":", ";")) or len(current.text.split()) < 15:
+                # Merge only when the next line strongly looks like a continuation.
+                if DocumentParser._should_merge_pdf_body_lines(current.text, p.text):
                     current = Paragraph(
                         text=current.text + " " + p.text,
                         level=0,
@@ -309,6 +360,22 @@ class DocumentParser:
 
         # Re-index with fresh Paragraph objects to avoid stale references
         return [Paragraph(text=p.text, level=p.level, style=p.style, index=i) for i, p in enumerate(merged)]
+
+    @staticmethod
+    def _should_merge_pdf_body_lines(current_text: str, next_text: str) -> bool:
+        if current_text.endswith("-"):
+            return True
+        if current_text.endswith(","):
+            return True
+        if re.search(r"[.!?:;]\s*$", current_text):
+            return False
+        if re.match(r"^[A-Z][A-Z\s/&-]{2,}$", current_text):
+            return False
+        if re.match(r"^[A-Z][A-Z\s/&-]{2,}$", next_text):
+            return False
+        if re.match(r"^[\u2022*•-]\s*", next_text):
+            return False
+        return bool(re.match(r"^[a-z(]", next_text))
 
     # ------------------------------------------------------------------
     # Plain text / Markdown parsing

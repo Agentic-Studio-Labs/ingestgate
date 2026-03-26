@@ -67,6 +67,21 @@ def test_report_scores_surfaces_parse_fidelity_warning():
     assert "sparse.pdf" in text
 
 
+def test_report_scores_surfaces_template_parse_fidelity_note():
+    from src.cli import _report_scores
+
+    issue = Issue(
+        severity=Severity.INFO,
+        category="structure",
+        message="Low parse fidelity (template-like document): only 25 words extracted from 53 KB file",
+    )
+    cards = [_make_card("tracker.pdf", 88, issues=[issue])]
+    lines = _report_scores(cards, detail=False)
+    text = "\n".join(lines)
+    assert "Parse fidelity notes (expected sparse templates)" in text
+    assert "tracker.pdf" in text
+
+
 def test_generate_report_path():
     """_generate_report_path returns timestamped filename."""
     from src.cli import _generate_report_path

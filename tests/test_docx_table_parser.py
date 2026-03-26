@@ -89,6 +89,25 @@ def test_docx_parser_deduplicates_merged_cells():
         assert header_count == 1, f"Expected 1 'Header Text', got {header_count}"
 
 
+def test_docx_parser_extracts_split_run_text_in_table_cells():
+    """Table cell text split across runs should be preserved as one paragraph."""
+    doc = Document()
+    table = doc.add_table(rows=1, cols=1)
+    cell_para = table.cell(0, 0).paragraphs[0]
+    cell_para.add_run("Students will bring home their ")
+    cell_para.add_run("Handout C")
+    cell_para.add_run(" and explain their goal.")
+
+    parser = DocumentParser()
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "runs.docx")
+        doc.save(path)
+        parsed = parser.parse(path)
+
+        full_text = parsed.full_text
+        assert "Students will bring home their Handout C and explain their goal." in full_text
+
+
 def test_low_parse_fidelity_flag_for_sparse_docx():
     """Scorer should flag when extracted text is suspiciously sparse for the file size."""
     # Create a minimal DOCX (will be small on disk, but we fake the file_size_bytes)
@@ -110,3 +129,28 @@ def test_low_parse_fidelity_flag_for_sparse_docx():
         structure_issues = [i for r in card.results if r.category == "structure" for i in r.issues]
         fidelity_issues = [i for i in structure_issues if "parse fidelity" in i.message.lower()]
         assert len(fidelity_issues) == 1, f"Expected 1 fidelity warning, got {len(fidelity_issues)}"
+        assert fidelity_issues[0].severity.value == "warning"
+
+
+def test_low_parse_fidelity_for_template_doc_is_informational():
+    """Template-like docs should keep fidelity signal but at INFO severity."""
+    doc = Document()
+    table = doc.add_table(rows=2, cols=1)
+    table.cell(0, 0).text = "Name:"
+    table.cell(1, 0).text = "Date:"
+
+    parser = DocumentParser()
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "progress-tracker.docx")
+        doc.save(path)
+        parsed = parser.parse(path)
+        parsed.metadata.file_size_bytes = 60_000
+
+        scorer = QualityScorer()
+        card = scorer.score(parsed)
+
+        structure_issues = [i for r in card.results if r.category == "structure" for i in r.issues]
+        fidelity_issues = [i for i in structure_issues if "parse fidelity" in i.message.lower()]
+        assert len(fidelity_issues) == 1
+        assert fidelity_issues[0].severity.value == "info"
+        assert "template-like" in fidelity_issues[0].message
