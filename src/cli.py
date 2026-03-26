@@ -98,6 +98,14 @@ def _build_benchmark_query(doc, corpus_analysis, max_terms: int = 6) -> str:
     return " ".join(terms[:max_terms])
 
 
+def _validate_gate_thresholds(pass_threshold: float, notes_threshold: float, remediation_threshold: float) -> None:
+    """Validate descending gate thresholds for decision mapping."""
+    if not (0 <= remediation_threshold <= 100 and 0 <= notes_threshold <= 100 and 0 <= pass_threshold <= 100):
+        raise click.BadParameter("Gate thresholds must be between 0 and 100.")
+    if not (pass_threshold > notes_threshold > remediation_threshold):
+        raise click.BadParameter("Thresholds must be strictly descending: pass > pass-with-notes > remediation.")
+
+
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
@@ -121,8 +129,32 @@ def cli():
 @click.option("--json-output", "json_out", is_flag=True, help="Output as JSON")
 @click.option("--exclude", multiple=True, help="Exclude files containing this substring (repeatable)")
 @click.option("--no-report", is_flag=True, help="Suppress markdown report generation")
-def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bool):
+@click.option("--pass-threshold", default=85.0, type=float, help="Minimum score for PASS (default: 85)")
+@click.option(
+    "--pass-with-notes-threshold",
+    default=70.0,
+    type=float,
+    help="Minimum score for PASS_WITH_NOTES (default: 70)",
+)
+@click.option(
+    "--remediation-threshold",
+    default=50.0,
+    type=float,
+    help="Minimum score for REMEDIATION_RECOMMENDED (default: 50)",
+)
+def score(
+    path: str,
+    detail: bool,
+    json_out: bool,
+    exclude: tuple,
+    no_report: bool,
+    pass_threshold: float,
+    pass_with_notes_threshold: float,
+    remediation_threshold: float,
+):
     """Analyze and score documents for RAG readiness (no LLM required)."""
+    _validate_gate_thresholds(pass_threshold, pass_with_notes_threshold, remediation_threshold)
+
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
         console.print("[red]No supported files found.[/red]")
@@ -160,6 +192,9 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
 
     scorer = QualityScorer(
         corpus_analysis=corpus_analysis,
+        gate_pass_threshold=pass_threshold,
+        gate_pass_with_notes_threshold=pass_with_notes_threshold,
+        gate_remediation_threshold=remediation_threshold,
     )
 
     with Progress(
@@ -185,7 +220,15 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
         _write_report_file(
             report_path,
             [
-                _report_header("score", len(cards)),
+                _report_header(
+                    "score",
+                    len(cards),
+                    settings={
+                        "pass-threshold": pass_threshold,
+                        "pass-with-notes-threshold": pass_with_notes_threshold,
+                        "remediation-threshold": remediation_threshold,
+                    },
+                ),
                 _report_scores(cards, detail),
             ],
         )
@@ -211,6 +254,19 @@ def score(path: str, detail: bool, json_out: bool, exclude: tuple, no_report: bo
 @click.option("--chunk-size", default=220, type=int, help="Target words per chunk")
 @click.option("--chunk-overlap", default=40, type=int, help="Overlapping words between chunks")
 @click.option("--run-benchmark", is_flag=True, help="Run chunk-level retrieval benchmark")
+@click.option("--pass-threshold", default=85.0, type=float, help="Minimum score for PASS (default: 85)")
+@click.option(
+    "--pass-with-notes-threshold",
+    default=70.0,
+    type=float,
+    help="Minimum score for PASS_WITH_NOTES (default: 70)",
+)
+@click.option(
+    "--remediation-threshold",
+    default=50.0,
+    type=float,
+    help="Minimum score for REMEDIATION_RECOMMENDED (default: 50)",
+)
 def analyze(
     path: str,
     llm_key: str,
@@ -225,6 +281,9 @@ def analyze(
     chunk_size: int,
     chunk_overlap: int,
     run_benchmark: bool,
+    pass_threshold: float,
+    pass_with_notes_threshold: float,
+    remediation_threshold: float,
 ):
     """Score documents + LLM content analysis."""
     from .analyzer import ContentAnalyzer
@@ -232,6 +291,8 @@ def analyze(
     from .chunker import DocumentChunker
     from .cleaner import DocumentCleaner
     from .export import build_manifest_data, write_chunk_sidecar, write_manifest, write_sidecar
+
+    _validate_gate_thresholds(pass_threshold, pass_with_notes_threshold, remediation_threshold)
 
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
@@ -283,6 +344,9 @@ def analyze(
     scorer = QualityScorer(
         graph=graph,
         corpus_analysis=corpus_analysis,
+        gate_pass_threshold=pass_threshold,
+        gate_pass_with_notes_threshold=pass_with_notes_threshold,
+        gate_remediation_threshold=remediation_threshold,
     )
     cards = [scorer.score(doc) for doc in docs]
     chunker = DocumentChunker(target_words=chunk_size, overlap_words=chunk_overlap)
@@ -342,6 +406,9 @@ def analyze(
                         "run-benchmark": run_benchmark,
                         "export-meta": not no_export_meta,
                         "export-chunks": export_chunks,
+                        "pass-threshold": pass_threshold,
+                        "pass-with-notes-threshold": pass_with_notes_threshold,
+                        "remediation-threshold": remediation_threshold,
                     },
                 ),
                 _report_scores(cards, detail),
@@ -406,6 +473,19 @@ def analyze(
 @click.option("--no-export-meta", is_flag=True, help="Skip writing .meta.json sidecar files and manifest.json")
 @click.option("--chunk-size", default=220, type=int, help="Target words per chunk")
 @click.option("--chunk-overlap", default=40, type=int, help="Overlapping words between chunks")
+@click.option("--pass-threshold", default=85.0, type=float, help="Minimum score for PASS (default: 85)")
+@click.option(
+    "--pass-with-notes-threshold",
+    default=70.0,
+    type=float,
+    help="Minimum score for PASS_WITH_NOTES (default: 70)",
+)
+@click.option(
+    "--remediation-threshold",
+    default=50.0,
+    type=float,
+    help="Minimum score for REMEDIATION_RECOMMENDED (default: 50)",
+)
 def fix(
     path: str,
     llm_key: str,
@@ -418,6 +498,9 @@ def fix(
     no_export_meta: bool,
     chunk_size: int,
     chunk_overlap: int,
+    pass_threshold: float,
+    pass_with_notes_threshold: float,
+    remediation_threshold: float,
 ):
     """Score + auto-fix issues, output improved Markdown files."""
     from datetime import datetime
@@ -428,6 +511,8 @@ def fix(
     from .export import write_chunk_sidecar, write_manifest, write_sidecar
     from .fixer import DocumentFixer
     from .parser import to_markdown
+
+    _validate_gate_thresholds(pass_threshold, pass_with_notes_threshold, remediation_threshold)
 
     files = discover_files(path, exclude_patterns=list(exclude) if exclude else None)
     if not files:
@@ -486,6 +571,9 @@ def fix(
     scorer = QualityScorer(
         graph=graph,
         corpus_analysis=corpus_analysis,
+        gate_pass_threshold=pass_threshold,
+        gate_pass_with_notes_threshold=pass_with_notes_threshold,
+        gate_remediation_threshold=remediation_threshold,
     )
     cards = [scorer.score(doc) for doc in docs]
     chunker = DocumentChunker(target_words=chunk_size, overlap_words=chunk_overlap)
@@ -598,6 +686,9 @@ def fix(
                         "chunk-overlap": chunk_overlap,
                         "fix-below": fix_below if fix_below > 0 else None,
                         "export-meta": not no_export_meta,
+                        "pass-threshold": pass_threshold,
+                        "pass-with-notes-threshold": pass_with_notes_threshold,
+                        "remediation-threshold": remediation_threshold,
                     },
                 ),
                 _report_scores(cards, detail=False),
@@ -624,11 +715,11 @@ def _print_score_table(cards: list[ScoreCard], detail: bool):
     for card in cards:
         # Color-code the score
         score = card.overall_score
-        if score >= 85:
+        if score >= card.gate_pass_threshold:
             score_str = f"[green]{score:.0f}[/green]"
-        elif score >= 70:
+        elif score >= card.gate_pass_with_notes_threshold:
             score_str = f"[yellow]{score:.0f}[/yellow]"
-        elif score >= 50:
+        elif score >= card.gate_remediation_threshold:
             score_str = f"[dark_orange]{score:.0f}[/dark_orange]"
         else:
             score_str = f"[red]{score:.0f}[/red]"
@@ -814,6 +905,35 @@ def _report_scores(cards: list[ScoreCard], detail: bool) -> list[str]:
     avg_score = sum(c.overall_score for c in cards) / len(cards) if cards else 0
     lines.append(f"**Average score:** {avg_score:.1f}")
     lines.append("")
+
+    decision_counts: dict[str, int] = {}
+    for card in cards:
+        decision = card.readiness.value
+        decision_counts[decision] = decision_counts.get(decision, 0) + 1
+    if decision_counts:
+        lines.append("## Gate Decision Rationale")
+        lines.append("")
+        lines.append("Distribution:")
+        for decision in ("PASS", "PASS_WITH_NOTES", "REMEDIATION_RECOMMENDED", "HOLD_FOR_REVIEW"):
+            if decision in decision_counts:
+                lines.append(f"- `{decision}`: {decision_counts[decision]}")
+        lines.append("")
+        lines.append("Drivers:")
+        for card in cards:
+            filename = Path(card.file_path).name
+            reasons: list[str] = []
+            critical_count = len(card.critical_issues)
+            if critical_count:
+                reasons.append(f"{critical_count} critical issue(s)")
+            warning_count = len(card.warnings)
+            if warning_count:
+                reasons.append(f"{warning_count} warning(s)")
+            if not reasons:
+                reasons.append("no blocking issues")
+            lines.append(
+                f"- `{filename}` -> `{card.readiness.value}` (score={card.overall_score:.0f}; {'; '.join(reasons)})"
+            )
+        lines.append("")
 
     parse_fidelity_warning_files: list[str] = []
     parse_fidelity_note_files: list[str] = []

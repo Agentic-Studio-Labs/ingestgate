@@ -44,7 +44,14 @@ class QualityScorer:
     FOCUS_HIGH_DIVERSITY = 0.85  # Flag as sprawling
     FOCUS_MODERATE_DIVERSITY = 0.70  # Flag as broad
 
-    def __init__(self, graph=None, corpus_analysis=None):
+    def __init__(
+        self,
+        graph=None,
+        corpus_analysis=None,
+        gate_pass_threshold: float = 85.0,
+        gate_pass_with_notes_threshold: float = 70.0,
+        gate_remediation_threshold: float = 50.0,
+    ):
         """Initialize scorer with optional knowledge graph and corpus analysis.
 
         If a graph is provided, adds Knowledge Completeness scoring
@@ -54,10 +61,18 @@ class QualityScorer:
         """
         self.graph = graph
         self.corpus_analysis = corpus_analysis
+        self.gate_pass_threshold = gate_pass_threshold
+        self.gate_pass_with_notes_threshold = gate_pass_with_notes_threshold
+        self.gate_remediation_threshold = gate_remediation_threshold
 
     def score(self, doc: ParsedDocument) -> ScoreCard:
         """Run all scoring criteria and return a complete ScoreCard."""
-        card = ScoreCard(file_path=doc.metadata.file_path)
+        card = ScoreCard(
+            file_path=doc.metadata.file_path,
+            gate_pass_threshold=self.gate_pass_threshold,
+            gate_pass_with_notes_threshold=self.gate_pass_with_notes_threshold,
+            gate_remediation_threshold=self.gate_remediation_threshold,
+        )
 
         card.add_result(self._score_self_containment(doc))
         card.add_result(self._score_heading_quality(doc))
@@ -631,7 +646,10 @@ class QualityScorer:
         if total_words < 120 and len(doc.body_paragraphs) < 5 and file_kb > 20:
             template_like = self._is_template_like_document(doc)
             if template_like:
-                message = f"Low parse fidelity (template-like document): only {total_words} words extracted from {file_kb:.0f} KB file"
+                message = (
+                    f"Low parse fidelity (template-like document): "
+                    f"only {total_words} words extracted from {file_kb:.0f} KB file"
+                )
                 fix = "Likely expected for forms/trackers/rubrics. Verify extraction quality visually."
                 severity = Severity.INFO
             else:

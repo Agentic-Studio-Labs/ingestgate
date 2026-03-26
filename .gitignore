@@ -47,6 +47,9 @@ CLAUDE_CODE_PROMPT_*.md
 .worktrees/
 .superpowers/
 superpowers/
+AGENTS.md
+@AGENTS.md
+.beads/
 docs/research/
 test-data/corpora/
 test-data/reports/

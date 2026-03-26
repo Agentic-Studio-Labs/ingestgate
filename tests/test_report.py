@@ -118,6 +118,18 @@ def test_gate_decision_mapping_and_legacy_readiness():
     assert critical.legacy_readiness == "EXCELLENT"
 
 
+def test_gate_decision_respects_custom_thresholds():
+    custom = ScoreCard(
+        file_path="/tmp/custom.docx",
+        overall_score=82,
+        gate_pass_threshold=90,
+        gate_pass_with_notes_threshold=80,
+        gate_remediation_threshold=60,
+    )
+    assert custom.readiness.value == "PASS_WITH_NOTES"
+    assert custom.legacy_readiness == "GOOD"
+
+
 def test_score_generates_report(tmp_path):
     """score command auto-generates a markdown report file."""
     # Create a test DOCX

@@ -187,6 +187,9 @@ class ScoreCard:
     file_path: str
     results: list[ScoringResult] = field(default_factory=list)
     overall_score: float = 0.0
+    gate_pass_threshold: float = 85.0
+    gate_pass_with_notes_threshold: float = 70.0
+    gate_remediation_threshold: float = 50.0
 
     def add_result(self, result: ScoringResult):
         self.results.append(result)
@@ -203,22 +206,22 @@ class ScoreCard:
         # Any critical issue escalates to manual review regardless of score.
         if self.critical_issues:
             return Readiness.HOLD_FOR_REVIEW
-        if self.overall_score >= 85:
+        if self.overall_score >= self.gate_pass_threshold:
             return Readiness.PASS
-        if self.overall_score >= 70:
+        if self.overall_score >= self.gate_pass_with_notes_threshold:
             return Readiness.PASS_WITH_NOTES
-        if self.overall_score >= 50:
+        if self.overall_score >= self.gate_remediation_threshold:
             return Readiness.REMEDIATION_RECOMMENDED
         return Readiness.HOLD_FOR_REVIEW
 
     @property
     def legacy_readiness(self) -> str:
         """Legacy score-band label kept for backward-compatible exports."""
-        if self.overall_score >= 85:
+        if self.overall_score >= self.gate_pass_threshold:
             return "EXCELLENT"
-        if self.overall_score >= 70:
+        if self.overall_score >= self.gate_pass_with_notes_threshold:
             return "GOOD"
-        if self.overall_score >= 50:
+        if self.overall_score >= self.gate_remediation_threshold:
             return "FAIR"
         return "POOR"
 

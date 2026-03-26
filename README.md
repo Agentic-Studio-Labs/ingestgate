@@ -247,6 +247,13 @@ The **corpus analyzer** (`src/corpus_analyzer.py`) computes a TF-IDF matrix acro
 
 For backward compatibility, sidecars and manifests still include the legacy score-band label (`readiness`: `EXCELLENT/GOOD/FAIR/POOR`) alongside the new `gate_decision` field.
 
+Need different cutoffs for your corpus? Use:
+- `--pass-threshold`
+- `--pass-with-notes-threshold`
+- `--remediation-threshold`
+
+These are available on `score`, `analyze`, and `fix`.
+
 ### Retrieval-Aware Scoring
 
 The most distinctive criterion. For each document, the scorer:

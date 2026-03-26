@@ -60,3 +60,24 @@ def test_analyze_run_benchmark_json_includes_query_source_note(tmp_path, monkeyp
     payload = json.loads(result.output.strip().splitlines()[-1])
     assert payload["benchmarks"]
     assert "query_source: heading+tfidf deterministic" in payload["benchmarks"][0]["notes"]
+
+
+def test_score_rejects_invalid_gate_thresholds(tmp_path):
+    test_file = str(tmp_path / "test.docx")
+    _create_test_docx(test_file)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "score",
+            str(tmp_path),
+            "--pass-threshold",
+            "70",
+            "--pass-with-notes-threshold",
+            "80",
+            "--remediation-threshold",
+            "50",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "pass > pass-with-notes > remediation" in result.output
