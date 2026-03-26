@@ -387,9 +387,6 @@ kb-prep/
 │   ├── layer5_rag_quality/      # Includes real PDF tests
 │   ├── cross_layer/
 │   └── corpora/                 # Downloaded data (gitignored)
-├── eval/
-│   ├── run_eval.py
-│   └── test-questions.json
 ├── pyproject.toml
 ├── README.md
 └── CLAUDE.md
@@ -456,11 +453,5 @@ anam.ai uses direct multipart upload with flat folders (hierarchy encoded in nam
 2. **Upload file** — multipart POST to `/v1/knowledge/groups/{id}/documents`
 
 Documents transition from `PROCESSING` → `READY` (~30 seconds). When `--persona-id` is provided, a knowledge tool (type `SERVER_RAG`) is created linking all folders to the persona.
-
-The eval script also supports anam.ai vector search for retrieval evaluation:
-
-```bash
-python eval/run_eval.py rag-files-*/ --llm-key $ANTHROPIC_API_KEY --anam-key $ANAM_API_KEY
-```
 
 **File size limits:** Warns at 25MB, blocks at 50MB.
