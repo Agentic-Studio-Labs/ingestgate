@@ -75,6 +75,8 @@ def test_write_sidecar_creates_file():
         assert Path(path).exists()
         data = json.loads(Path(path).read_text())
         assert data["ingestgate_version"] == "0.1.0"
+        assert data["scores"]["readiness"] == "GOOD"
+        assert data["scores"]["gate_decision"] == "PASS_WITH_NOTES"
 
 
 def test_sidecar_schema_keys():
@@ -146,6 +148,11 @@ def test_manifest_corpus_stats():
         data = json.loads(Path(path).read_text())
         assert data["corpus"]["total_documents"] == 2
         assert data["corpus"]["avg_score"] == 70.0
+        assert data["corpus"]["readiness_distribution"] == {"GOOD": 1, "FAIR": 1}
+        assert data["corpus"]["gate_decision_distribution"] == {
+            "PASS_WITH_NOTES": 1,
+            "REMEDIATION_RECOMMENDED": 1,
+        }
         assert "retrieval_mode_distribution" in data["corpus"]
 
 

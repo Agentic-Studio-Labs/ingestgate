@@ -147,10 +147,10 @@ class Severity(str, Enum):
 
 
 class Readiness(str, Enum):
-    EXCELLENT = "EXCELLENT"
-    GOOD = "GOOD"
-    FAIR = "FAIR"
-    POOR = "POOR"
+    PASS = "PASS"
+    PASS_WITH_NOTES = "PASS_WITH_NOTES"
+    REMEDIATION_RECOMMENDED = "REMEDIATION_RECOMMENDED"
+    HOLD_FOR_REVIEW = "HOLD_FOR_REVIEW"
 
 
 @dataclass
@@ -200,14 +200,27 @@ class ScoreCard:
 
     @property
     def readiness(self) -> Readiness:
+        # Any critical issue escalates to manual review regardless of score.
+        if self.critical_issues:
+            return Readiness.HOLD_FOR_REVIEW
         if self.overall_score >= 85:
-            return Readiness.EXCELLENT
-        elif self.overall_score >= 70:
-            return Readiness.GOOD
-        elif self.overall_score >= 50:
-            return Readiness.FAIR
-        else:
-            return Readiness.POOR
+            return Readiness.PASS
+        if self.overall_score >= 70:
+            return Readiness.PASS_WITH_NOTES
+        if self.overall_score >= 50:
+            return Readiness.REMEDIATION_RECOMMENDED
+        return Readiness.HOLD_FOR_REVIEW
+
+    @property
+    def legacy_readiness(self) -> str:
+        """Legacy score-band label kept for backward-compatible exports."""
+        if self.overall_score >= 85:
+            return "EXCELLENT"
+        if self.overall_score >= 70:
+            return "GOOD"
+        if self.overall_score >= 50:
+            return "FAIR"
+        return "POOR"
 
     @property
     def all_issues(self) -> list[Issue]:

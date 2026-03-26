@@ -47,7 +47,10 @@ def write_sidecar(
         },
         "scores": {
             "overall": card.overall_score,
-            "readiness": card.readiness.value,
+            # Keep legacy score-band label for compatibility.
+            "readiness": card.legacy_readiness,
+            # New gate-style decision label.
+            "gate_decision": card.readiness.value,
             "criteria": {
                 r.category: {
                     "score": r.score,
@@ -119,9 +122,12 @@ def build_manifest_data(
     split_recommendations = split_recommendations or []
 
     readiness_dist: dict[str, int] = {}
+    gate_decision_dist: dict[str, int] = {}
     for card in cards:
-        r = card.readiness.value
-        readiness_dist[r] = readiness_dist.get(r, 0) + 1
+        legacy = card.legacy_readiness
+        readiness_dist[legacy] = readiness_dist.get(legacy, 0) + 1
+        gate = card.readiness.value
+        gate_decision_dist[gate] = gate_decision_dist.get(gate, 0) + 1
 
     total_entities = 0
     total_relationships = 0
@@ -146,7 +152,10 @@ def build_manifest_data(
             {
                 "source_file": doc.metadata.filename,
                 "overall_score": round(card.overall_score, 1),
-                "readiness": card.readiness.value,
+                # Backward-compatible legacy label.
+                "readiness": card.legacy_readiness,
+                # New gate-style decision label.
+                "gate_decision": card.readiness.value,
                 "domain": analysis.domain,
                 "topics": analysis.topics,
                 "entity_count": len(analysis.entities),
@@ -199,6 +208,7 @@ def build_manifest_data(
             "total_chunks": sum(len(cs.chunks) for cs in chunk_sets),
             "avg_score": round(avg_score, 1),
             "readiness_distribution": readiness_dist,
+            "gate_decision_distribution": gate_decision_dist,
             "retrieval_mode_distribution": retrieval_mode_distribution,
             "total_entities": total_entities,
             "total_relationships": total_relationships,

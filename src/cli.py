@@ -617,7 +617,7 @@ def _print_score_table(cards: list[ScoreCard], detail: bool):
     table = Table(title="IngestGate Scores")
     table.add_column("File", style="cyan", max_width=40)
     table.add_column("Score", justify="right")
-    table.add_column("Readiness", justify="center")
+    table.add_column("Gate Decision", justify="center")
     table.add_column("Issues", justify="right")
     table.add_column("Size", justify="right")
 
@@ -635,10 +635,10 @@ def _print_score_table(cards: list[ScoreCard], detail: bool):
 
         readiness = card.readiness.value
         readiness_colors = {
-            "EXCELLENT": "green",
-            "GOOD": "yellow",
-            "FAIR": "dark_orange",
-            "POOR": "red",
+            "PASS": "green",
+            "PASS_WITH_NOTES": "yellow",
+            "REMEDIATION_RECOMMENDED": "dark_orange",
+            "HOLD_FOR_REVIEW": "red",
         }
         readiness_str = (
             f"[{readiness_colors.get(readiness, 'white')}]{readiness}[/{readiness_colors.get(readiness, 'white')}]"
@@ -738,7 +738,8 @@ def _print_json(cards: list[ScoreCard]):
             {
                 "file": card.file_path,
                 "score": round(card.overall_score, 1),
-                "readiness": card.readiness.value,
+                "readiness": card.legacy_readiness,
+                "gate_decision": card.readiness.value,
                 "categories": {
                     r.category: {
                         "score": round(r.score, 1),
@@ -803,7 +804,7 @@ def _report_scores(cards: list[ScoreCard], detail: bool) -> list[str]:
     lines: list[str] = []
     lines.append("## Scores")
     lines.append("")
-    lines.append("| File | Score | Readiness | Issues |")
+    lines.append("| File | Score | Gate Decision | Issues |")
     lines.append("|------|------:|:---------:|-------:|")
     for card in cards:
         filename = Path(card.file_path).name

@@ -12,7 +12,8 @@ This guide explains how to interpret `.ingestgate/manifest.json` and convert Ing
 ## Corpus-Level Fields
 
 - `corpus.total_documents`, `corpus.total_chunks`, `corpus.avg_score`: basic coverage and quality snapshot.
-- `corpus.readiness_distribution`: EXCELLENT/GOOD/FAIR/POOR spread.
+- `corpus.gate_decision_distribution`: PASS/PASS_WITH_NOTES/REMEDIATION_RECOMMENDED/HOLD_FOR_REVIEW spread.
+- `corpus.readiness_distribution`: legacy EXCELLENT/GOOD/FAIR/POOR spread (kept for compatibility).
 - `corpus.retrieval_mode_distribution`: count of docs by recommended retrieval strategy.
   - `text_hybrid_default`: normal lexical+vector retrieval should be fine.
   - `hybrid_sparse_template`: use hybrid retrieval with metadata filters for form-like docs.
@@ -37,6 +38,10 @@ Suggested guardrails:
 ## Per-Document Retrieval Quality Gate
 
 Located at `documents[*].retrieval_quality_gate`.
+
+Decision labels are exposed at the document level as:
+- `documents[*].gate_decision`: current operational decision label.
+- `documents[*].readiness`: legacy score-band label preserved for compatibility.
 
 ### `retrieval_mode_hint`
 

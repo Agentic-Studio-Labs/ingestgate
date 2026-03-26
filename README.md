@@ -243,9 +243,9 @@ The **corpus analyzer** (`src/corpus_analyzer.py`) computes a TF-IDF matrix acro
 | File Size              | info   | Warns at 25MB, blocks at 50MB                                                                                                                        |
 
 
-**Readiness levels:** `EXCELLENT` (85+), `GOOD` (70-84), `FAIR` (50-69), `POOR` (<50)
+**Gate decisions:** `PASS` (85+), `PASS_WITH_NOTES` (70-84), `REMEDIATION_RECOMMENDED` (50-69), `HOLD_FOR_REVIEW` (<50 or any critical issue)
 
-These are product buckets over the numeric score, not an industry standard. The numeric score is the primary measurement; the label is a compact interpretation for operators.
+For backward compatibility, sidecars and manifests still include the legacy score-band label (`readiness`: `EXCELLENT/GOOD/FAIR/POOR`) alongside the new `gate_decision` field.
 
 ### Retrieval-Aware Scoring
 
@@ -348,6 +348,7 @@ Analysis sidecar example:
   "scores": {
     "overall": 72.5,
     "readiness": "GOOD",
+    "gate_decision": "PASS_WITH_NOTES",
     "criteria": { "self_containment": { "score": 88.0, "weight": 0.20, "issues": 1 } }
   },
   "metrics": {
@@ -378,7 +379,7 @@ Analysis sidecar example:
 
 ### Corpus manifest
 
-A single `manifest.json` at the output root contains corpus-level stats (including `retrieval_mode_distribution`), all document entries (including per-document `retrieval_quality_gate`), knowledge graph (entities, relationships, clusters), document similarity matrix (for corpora under 100 documents), chunk benchmarks, and `split_recommendations` for broad documents.
+A single `manifest.json` at the output root contains corpus-level stats (including `retrieval_mode_distribution` and `gate_decision_distribution`), all document entries (including per-document `retrieval_quality_gate`), knowledge graph (entities, relationships, clusters), document similarity matrix (for corpora under 100 documents), chunk benchmarks, and `split_recommendations` for broad documents.
 
 In practice, operators usually read it in this order:
 
@@ -598,7 +599,7 @@ repo/
 ## TODO
 
 - **Vendor landscape refresh cadence** — review and update the "Current and Upcoming Vendor Landscape" section quarterly (next review: 2026-06)
-- **Readiness label rethink** — current `EXCELLENT/GOOD/FAIR/POOR` buckets are product-defined score bands; revisit whether gate-style labels (for example `PASS` / `REMEDIATION_RECOMMENDED`) better match the IngestGate framing
+- **Gate threshold tuning** — validate whether the current decision cutoffs best match downstream ingestion outcomes
 - **Structured LLM output** — replace JSON-in-markdown prompts with tool_use for reliable extraction
 - **Incremental analysis** — cache per-file LLM results so `fix` doesn't re-run the full `analyze` pipeline. Currently `fix` repeats all LLM analysis calls from scratch
 - **Relationship deduplication** — merge duplicate edges and track edge weight/frequency

@@ -1,3 +1,7 @@
+import os
+
+from click.testing import CliRunner
+
 from src.models import Issue, ScoreCard, ScoringResult, Severity
 
 
@@ -94,9 +98,24 @@ def test_generate_report_path():
     assert len(parts) == 15  # YYYYMMDD-HHMMSS
 
 
-import os
+def test_gate_decision_mapping_and_legacy_readiness():
+    issue = Issue(severity=Severity.CRITICAL, category="structure", message="Major parse failure")
 
-from click.testing import CliRunner
+    passing = _make_card("pass.docx", 92)
+    assert passing.readiness.value == "PASS"
+    assert passing.legacy_readiness == "EXCELLENT"
+
+    needs_notes = _make_card("notes.docx", 74)
+    assert needs_notes.readiness.value == "PASS_WITH_NOTES"
+    assert needs_notes.legacy_readiness == "GOOD"
+
+    remediation = _make_card("remediate.docx", 55)
+    assert remediation.readiness.value == "REMEDIATION_RECOMMENDED"
+    assert remediation.legacy_readiness == "FAIR"
+
+    critical = _make_card("critical.docx", 91, issues=[issue])
+    assert critical.readiness.value == "HOLD_FOR_REVIEW"
+    assert critical.legacy_readiness == "EXCELLENT"
 
 
 def test_score_generates_report(tmp_path):
