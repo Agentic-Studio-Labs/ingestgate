@@ -106,6 +106,8 @@ python -m src.cli analyze <path> --llm-key $ANTHROPIC_API_KEY [options]
 | `--model TEXT` | LLM model override (default: claude-sonnet-4-20250514) |
 | `--concurrency N` | Max parallel LLM calls (default: 5) |
 | `--folder-hints PATH` | File with domain-specific folder guidance |
+| `--json-output` | Output manifest JSON to stdout (pipeable with `jq`) |
+| `--no-export-meta` | Skip writing `.meta.json` sidecar files and `manifest.json` |
 | `--detail` | Show per-issue breakdown |
 | `--exclude TEXT` | Skip files matching this substring (repeatable) |
 | `--no-report` | Don't generate the Markdown report file |
@@ -124,6 +126,7 @@ python -m src.cli fix <path> --llm-key $ANTHROPIC_API_KEY [options]
 | `--model TEXT` | LLM model override |
 | `--concurrency N` | Max parallel LLM calls (default: 5) |
 | `--folder-hints PATH` | File with domain-specific folder guidance |
+| `--no-export-meta` | Skip writing `.meta.json` sidecar files and `manifest.json` |
 | `--exclude TEXT` | Skip files matching this substring (repeatable) |
 | `--no-report` | Don't generate the Markdown report file |
 
@@ -219,6 +222,77 @@ When you run `fix` with `--llm-key`, targeted prompts are sent to Claude to fix 
 | Generic filename    | Generates descriptive filename from content             |
 
 Originals are never modified. Fixed files are written as clean Markdown to the output directory.
+
+## Metadata Export
+
+Both `analyze` and `fix` produce machine-readable JSON metadata alongside their output — so downstream RAG pipelines (LlamaIndex, LangChain, Pinecone, Weaviate, etc.) can consume the analysis results programmatically.
+
+### Sidecar files
+
+Each document gets a `.meta.json` file written next to its output:
+
+```
+output/
+├── Insurance Concepts/
+│   ├── insurance-types.md
+│   └── insurance-types.meta.json    ← sidecar
+├── Goal Setting/
+│   ├── smart-goals.md
+│   └── smart-goals.meta.json        ← sidecar
+└── manifest.json                     ← corpus manifest
+```
+
+Each sidecar contains the document's analysis, scores, metrics, entities, relationships, and folder assignment:
+
+```json
+{
+  "kb_prep_version": "0.1.0",
+  "source_file": "4-5.FL.10 Handout B. Types of Insurance.docx",
+  "output_file": "insurance-types.md",
+  "analysis": {
+    "domain": "education",
+    "topics": ["insurance", "risk management"],
+    "summary": "Handout describing different types of insurance..."
+  },
+  "scores": {
+    "overall": 72.5,
+    "readiness": "GOOD",
+    "criteria": { "self_containment": { "score": 88.0, "weight": 0.20, "issues": 1 } }
+  },
+  "metrics": {
+    "entropy": 0.42,
+    "coherence": 0.71,
+    "self_retrieval_score": 0.65
+  },
+  "entities": [
+    { "name": "Health Insurance", "type": "concept", "description": "Coverage for medical expenses" }
+  ],
+  "relationships": [
+    { "source": "Health Insurance", "target": "Premium", "type": "related_to" }
+  ],
+  "folder": "Insurance Concepts"
+}
+```
+
+### Corpus manifest
+
+A single `manifest.json` at the output root contains corpus-level stats, all document entries, the folder structure, knowledge graph (entities, relationships, clusters), and document similarity matrix (for corpora under 100 documents).
+
+### Usage
+
+```bash
+# fix writes sidecars + manifest by default
+python -m src.cli fix ./my-docs/ --llm-key $KEY
+
+# analyze writes to .kb-prep/ subdirectory
+python -m src.cli analyze ./my-docs/ --llm-key $KEY
+
+# pipe manifest to jq
+python -m src.cli analyze ./my-docs/ --llm-key $KEY --json-output | jq .corpus
+
+# suppress metadata export
+python -m src.cli fix ./my-docs/ --llm-key $KEY --no-export-meta
+```
 
 ## Knowledge Graph
 
