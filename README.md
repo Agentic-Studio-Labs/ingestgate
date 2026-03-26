@@ -13,6 +13,30 @@ Most RAG failures aren't embedding problems or chunk size problems. They're **do
 
 Supports DOCX, PDF, TXT, and Markdown. Works with any vector database (Pinecone, Weaviate, Qdrant, Chroma, etc.) or RAG framework (LlamaIndex, LangChain, etc.). Includes optional direct upload to [anam.ai](https://anam.ai).
 
+### Pipeline
+
+```mermaid
+flowchart LR
+    Input["📄 DOCX / PDF / MD / TXT"] --> Parse
+    Parse --> CA["Corpus Analyzer<br/><small>TF-IDF matrix<br/>entropy, coherence<br/>similarity</small>"]
+    CA --> Score["Score<br/><small>10 criteria incl.<br/>retrieval-aware</small>"]
+    Score --> Analyze["LLM Analyze<br/><small>entities, relationships<br/>knowledge graph</small>"]
+    Score --> Fix["Auto-Fix<br/><small>rewrite refs, split<br/>paragraphs, headings</small>"]
+    Analyze --> Recommend["Recommend<br/><small>folder structure<br/>Louvain clusters</small>"]
+    Analyze --> Fix
+    Fix --> Output["📁 Fixed Markdown<br/><small>rag-files-{timestamp}/</small>"]
+    Recommend --> Upload["Upload<br/><small>anam.ai or<br/>any vector DB</small>"]
+    Output --> Upload
+
+    style Input fill:#f9f,stroke:#333
+    style Output fill:#9f9,stroke:#333
+    style Upload fill:#9cf,stroke:#333
+    style CA fill:#ffd,stroke:#333
+    style Score fill:#ffd,stroke:#333
+```
+
+`score` runs Parse → Corpus Analyzer → Score. `analyze` adds LLM analysis and folder recommendations. `fix` adds auto-fix and writes improved Markdown. `upload` adds anam.ai folder creation and file upload.
+
 ### Why retrieval-aware scoring?
 
 Most document prep tools check structural quality — paragraph length, heading hierarchy, readability. These are useful but they're proxies. A document can pass every structural check and still be invisible to search if its vocabulary is too generic or too similar to other documents in the corpus.
