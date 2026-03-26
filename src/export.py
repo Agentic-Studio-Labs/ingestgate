@@ -70,17 +70,19 @@ def write_sidecar(
     return str(out_path)
 
 
-def write_manifest(
-    output_dir: str,
+def build_manifest_data(
     docs: list[ParsedDocument],
     analyses: list[ContentAnalysis],
     cards: list[ScoreCard],
     corpus_analysis: CorpusAnalysis,
     recommendation: FolderRecommendation,
     graph=None,
-) -> str:
-    """Write a corpus-level manifest.json to the output directory root."""
-    # Corpus stats
+) -> dict:
+    """Build the corpus manifest as a JSON-serializable dict.
+
+    Use this directly for --json-output (no file I/O needed).
+    Use write_manifest() to also write it to disk.
+    """
     readiness_dist: dict[str, int] = {}
     for card in cards:
         r = card.readiness.value
@@ -97,7 +99,6 @@ def write_manifest(
 
     avg_score = sum(c.overall_score for c in cards) / len(cards) if cards else 0.0
 
-    # Documents list
     doc_entries = []
     for doc, analysis, card in zip(docs, analyses, cards):
         folder = recommendation.file_assignments.get(doc.metadata.filename, "")
@@ -114,10 +115,8 @@ def write_manifest(
             }
         )
 
-    # Folder structure
     folders_list = _serialize_folder_tree(recommendation.root) if recommendation.root else []
 
-    # Knowledge graph
     kg_data = None
     if graph and not graph.is_empty:
         kg_entities = [
@@ -143,7 +142,6 @@ def write_manifest(
             "clusters": kg_clusters,
         }
 
-    # Similarity matrix (skip for large corpora)
     sim_data = None
     if hasattr(corpus_analysis, "similarity_matrix") and corpus_analysis.similarity_matrix.size > 0:
         n = corpus_analysis.similarity_matrix.shape[0]
@@ -153,7 +151,7 @@ def write_manifest(
                 "matrix": corpus_analysis.similarity_matrix.tolist(),
             }
 
-    data = {
+    return {
         "kb_prep_version": "0.1.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "corpus": {
@@ -170,6 +168,18 @@ def write_manifest(
         "similarity_matrix": sim_data,
     }
 
+
+def write_manifest(
+    output_dir: str,
+    docs: list[ParsedDocument],
+    analyses: list[ContentAnalysis],
+    cards: list[ScoreCard],
+    corpus_analysis: CorpusAnalysis,
+    recommendation: FolderRecommendation,
+    graph=None,
+) -> str:
+    """Write a corpus-level manifest.json to the output directory root."""
+    data = build_manifest_data(docs, analyses, cards, corpus_analysis, recommendation, graph)
     out_path = Path(output_dir) / "manifest.json"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

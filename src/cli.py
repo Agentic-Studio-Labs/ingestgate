@@ -262,13 +262,13 @@ def analyze(
         console.print(f"\n[green]Report:[/green] {report_path}")
 
     # Export metadata
-    meta_dir = os.path.join(path, ".kb-prep")
     if json_out:
         import json as _json
 
-        manifest_path = write_manifest(meta_dir, docs, analyses, cards, corpus_analysis, recommendation, graph)
-        print(_json.dumps(_json.loads(Path(manifest_path).read_text())))
+        data = build_manifest_data(docs, analyses, cards, corpus_analysis, recommendation, graph)
+        print(_json.dumps(data))
     elif not no_export_meta:
+        meta_dir = os.path.join(path, ".kb-prep")
         for doc, analysis, card in zip(docs, analyses, cards):
             filename = doc.metadata.filename
             doc_metrics = corpus_analysis.doc_metrics.get(filename)
