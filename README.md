@@ -152,6 +152,9 @@ ingestgate score <path> [options]
 | `--json-output`  | Output scores as JSON                           |
 | `--exclude TEXT` | Skip files matching this substring (repeatable) |
 | `--no-report`    | Don't generate the Markdown report file         |
+| `--pass-threshold N` | Minimum score for `PASS` (default: 85)      |
+| `--pass-with-notes-threshold N` | Minimum score for `PASS_WITH_NOTES` (default: 70) |
+| `--remediation-threshold N` | Minimum score for `REMEDIATION_RECOMMENDED` (default: 50) |
 
 
 ### `analyze` — findability benchmark + decision support
@@ -175,6 +178,9 @@ ingestgate analyze <path> --llm-key $ANTHROPIC_API_KEY [options]
 | `--detail`            | Show per-issue breakdown                                    |
 | `--exclude TEXT`      | Skip files matching this substring (repeatable)             |
 | `--no-report`         | Don't generate the Markdown report file                     |
+| `--pass-threshold N`  | Minimum score for `PASS` (default: 85)                      |
+| `--pass-with-notes-threshold N` | Minimum score for `PASS_WITH_NOTES` (default: 70) |
+| `--remediation-threshold N` | Minimum score for `REMEDIATION_RECOMMENDED` (default: 50) |
 
 
 ### `fix` — remediation before ingestion
@@ -196,11 +202,14 @@ ingestgate fix <path> --llm-key $ANTHROPIC_API_KEY [options]
 | `--chunk-overlap N`   | Overlap words between chunks (default: 40)                  |
 | `--exclude TEXT`      | Skip files matching this substring (repeatable)             |
 | `--no-report`         | Don't generate the Markdown report file                     |
+| `--pass-threshold N`  | Minimum score for `PASS` (default: 85)                      |
+| `--pass-with-notes-threshold N` | Minimum score for `PASS_WITH_NOTES` (default: 70) |
+| `--remediation-threshold N` | Minimum score for `REMEDIATION_RECOMMENDED` (default: 50) |
 
 
 ### Common options
 
-All commands auto-generate a timestamped Markdown report (e.g. `ingestgate-score-20260325-143000.md`). Suppress with `--no-report`. API keys can be set via `.env` file or environment variables instead of flags.
+All commands auto-generate a timestamped Markdown report (e.g. `ingestgate-score-20260325-143000.md`). Reports now include a Gate Decision Rationale section with decision counts and per-document drivers. Suppress with `--no-report`. API keys can be set via `.env` file or environment variables instead of flags.
 
 ## How Quality Is Measured
 

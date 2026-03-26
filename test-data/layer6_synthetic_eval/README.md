@@ -29,6 +29,10 @@ ingestgate score test-data/layer6_synthetic_eval/corpus/
 ingestgate analyze test-data/layer6_synthetic_eval/corpus/ --llm-key $ANTHROPIC_API_KEY --run-benchmark
 ingestgate fix test-data/layer6_synthetic_eval/corpus/ --llm-key $ANTHROPIC_API_KEY
 ingestgate analyze test-data/layer6_synthetic_eval/corpus/ --llm-key $ANTHROPIC_API_KEY --run-benchmark
+
+# optional: tune gate thresholds for stricter/looser triage
+ingestgate score test-data/layer6_synthetic_eval/corpus/ \
+  --pass-threshold 88 --pass-with-notes-threshold 72 --remediation-threshold 55
 ```
 
 `analyze` writes metadata to `test-data/layer6_synthetic_eval/corpus/.ingestgate/`.
@@ -40,3 +44,4 @@ ingestgate analyze test-data/layer6_synthetic_eval/corpus/ --llm-key $ANTHROPIC_
 - `03_table_layout_lesson.docx` should preserve table content and split-run phrases.
 - `04_sparse_tracker_template.pdf` should lean toward non-default retrieval mode hints.
 - `05_topic_overlap_packet.md` should be the best candidate for `split_recommendations`.
+- Reports should include a Gate Decision Rationale section summarizing decisions and primary drivers.
