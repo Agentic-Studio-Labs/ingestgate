@@ -24,14 +24,13 @@ flowchart TD
     Analyze[LLM Analyze — entities · relationships · knowledge graph]
     Fix[Auto-Fix — rewrite refs · split paragraphs · headings]
     Recommend[Recommend Folders — Louvain clusters · PageRank]
-    Output[Fixed Markdown]
+    Output[Fixed Markdown + .meta.json sidecars + manifest.json]
     Upload[Upload — anam.ai or any vector DB]
 
     Input --> Parse --> CA --> Score
     Score -->|+ analyze| Analyze
-    Score -->|+ fix| Fix
     Analyze --> Recommend
-    Analyze --> Fix
+    Analyze -->|+ fix| Fix
     Fix --> Output
     Recommend --> Upload
     Output --> Upload
@@ -40,8 +39,8 @@ flowchart TD
 | Command | What runs |
 |---------|-----------|
 | `score` | Parse → Corpus Analyzer → Score |
-| `analyze` | + LLM analysis, knowledge graph, folder recommendations |
-| `fix` | + auto-fix, writes improved Markdown to output directory |
+| `analyze` | + LLM analysis, knowledge graph, folder recommendations, metadata export |
+| `fix` | + auto-fix, writes improved Markdown + sidecar JSON to output directory |
 | `upload` | + anam.ai folder creation and file upload |
 
 ### Why retrieval-aware scoring?
