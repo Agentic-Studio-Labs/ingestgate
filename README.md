@@ -250,17 +250,17 @@ Originals are never modified. Fixed files are written as clean Markdown to the o
 
 ## Chunking
 
-Both `analyze` and `fix` produce heading-aware chunks for every document. The chunker splits text at heading boundaries first, then applies word-level windowing within each section.
+The `analyze` and `fix` commands produce heading-aware chunks for every document. The chunker splits text at heading boundaries first, then applies word-level windowing within each section.
 
 - **Heading-preserving** — chunks never cross heading boundaries. Each chunk carries its full heading path (e.g. `["Unit 3", "Budgeting", "Income Sources"]`).
 - **Configurable size** — `--chunk-size 220` (target words per chunk) and `--chunk-overlap 40` (words shared between adjacent chunks). Defaults produce chunks of roughly 200-250 words.
 - **Quality metadata** — each chunk records its source document, paragraph range, token estimate, and quality flags.
 
-Chunk output is written as `.chunks.json` sidecar files alongside `.meta.json` (suppress with `--no-export-chunks`).
+Chunk output is written as `.chunks.json` sidecar files alongside `.meta.json`. For `analyze`, suppress with `--no-export-chunks`.
 
 ### Retrieval benchmarks
 
-Pass `--run-benchmark` to measure how well chunks retrieve against filename-derived queries using BM25+:
+Pass `--run-benchmark` to measure how well chunks retrieve against deterministic queries built from headings and top TF-IDF terms:
 
 ```bash
 python -m src.cli analyze ./my-docs/ --llm-key $KEY --run-benchmark
