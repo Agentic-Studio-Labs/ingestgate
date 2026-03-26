@@ -86,7 +86,7 @@ class QualityScorer:
         return card
 
     # ------------------------------------------------------------------
-    # 1. Self-Containment (25%)
+    # 1. Self-Containment (20%)
     # ------------------------------------------------------------------
 
     def _score_self_containment(self, doc: ParsedDocument) -> ScoringResult:
@@ -128,7 +128,7 @@ class QualityScorer:
         )
 
     # ------------------------------------------------------------------
-    # 2. Heading Quality (20%)
+    # 2. Heading Quality (15%)
     # ------------------------------------------------------------------
 
     def _score_heading_quality(self, doc: ParsedDocument) -> ScoringResult:
@@ -225,7 +225,7 @@ class QualityScorer:
         )
 
     # ------------------------------------------------------------------
-    # 3. Paragraph Length (15%)
+    # 3. Paragraph Length (10%)
     # ------------------------------------------------------------------
 
     def _score_paragraph_length(self, doc: ParsedDocument) -> ScoringResult:
@@ -286,7 +286,7 @@ class QualityScorer:
         )
 
     # ------------------------------------------------------------------
-    # 4. File Focus (15%)
+    # 4. File Focus (10%)
     # ------------------------------------------------------------------
 
     def _score_file_focus(self, doc: ParsedDocument) -> ScoringResult:

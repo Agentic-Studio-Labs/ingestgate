@@ -9,7 +9,7 @@ Most RAG failures aren't embedding problems or chunk size problems. They're **do
 - **Scores** documents across 10 criteria including a retrieval-aware metric that simulates search queries against your corpus to test whether each document can actually be found
 - **Analyzes** content with an LLM to extract entities and relationships, building a knowledge graph across your entire corpus
 - **Fixes** issues automatically — rewrites dangling references, splits long paragraphs, replaces generic headings, defines acronyms
-- **Organizes** documents into folders using spectral clustering and graph-based community detection
+- **Organizes** documents into folders using graph-based community detection (Louvain) and TF-IDF similarity
 
 Supports DOCX, PDF, TXT, and Markdown. Works with any vector database (Pinecone, Weaviate, Qdrant, Chroma, etc.) or RAG framework (LlamaIndex, LangChain, etc.). Includes optional direct upload to [anam.ai](https://anam.ai).
 
@@ -93,7 +93,7 @@ The most distinctive criterion. For each document, the scorer:
 
 1. Extracts the top TF-IDF terms (the document's most characteristic vocabulary)
 2. Generates synthetic queries from 3-term combinations
-3. Runs each query against the full corpus using BM25
+3. Runs each query against the full corpus using BM25+
 4. Measures what percentage of queries about this document actually find it in the top 5 results
 
 A document that scores 80-100% is well-structured for retrieval. A document scoring below 40% has structural problems — buried content, generic vocabulary, or misleading headings — that make it hard to find via search.

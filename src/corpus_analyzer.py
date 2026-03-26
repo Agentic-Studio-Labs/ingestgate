@@ -271,28 +271,43 @@ def rocchio_expand_query(
     alpha: float = 1.0,
     beta: float = 0.75,
     gamma: float = 0.15,
+    vectorizer: TfidfVectorizer | None = None,
 ) -> str:
-    """Expand a query using Rocchio pseudo-relevance feedback."""
-    vectorizer = TfidfVectorizer(stop_words="english")
-    all_texts = corpus_texts + [query]
-    try:
-        matrix = vectorizer.fit_transform(all_texts)
-    except ValueError:
-        return query
-    query_vec = matrix[-1]
-    doc_matrix = matrix[:-1]
+    """Expand a query using Rocchio pseudo-relevance feedback.
+
+    Uses the corpus-level vectorizer (if provided) so that IDF weights
+    are consistent with the rest of the pipeline. Falls back to a local
+    vectorizer when called standalone.
+    """
+    if vectorizer is not None:
+        try:
+            doc_matrix = vectorizer.transform(corpus_texts)
+            query_vec = vectorizer.transform([query])
+            feat_names = vectorizer.get_feature_names_out()
+        except Exception:
+            return query
+    else:
+        local_vec = TfidfVectorizer(stop_words="english")
+        all_texts = corpus_texts + [query]
+        try:
+            matrix = local_vec.fit_transform(all_texts)
+        except ValueError:
+            return query
+        query_vec = matrix[-1]
+        doc_matrix = matrix[:-1]
+        feat_names = local_vec.get_feature_names_out()
+
     sims = cosine_similarity(query_vec, doc_matrix)[0]
     top_indices = sims.argsort()[-top_k:][::-1]
     relevant = doc_matrix[top_indices].mean(axis=0)
     corpus_mean = doc_matrix.mean(axis=0)
     expanded_vec = alpha * query_vec.toarray() + beta * np.array(relevant) - gamma * np.array(corpus_mean)
-    feature_names = vectorizer.get_feature_names_out()
     query_terms = set(re.findall(r"\w+", query.lower()))
     expanded_flat = np.array(expanded_vec).flatten()
     term_scores = [
-        (feature_names[i], expanded_flat[i])
-        for i in range(len(feature_names))
-        if feature_names[i] not in query_terms and expanded_flat[i] > 0
+        (feat_names[i], expanded_flat[i])
+        for i in range(len(feat_names))
+        if feat_names[i] not in query_terms and expanded_flat[i] > 0
     ]
     term_scores.sort(key=lambda x: -x[1])
     expansion_terms = [t for t, _ in term_scores[:n_expand]]
@@ -338,18 +353,33 @@ def _bm25_score(
     return scores
 
 
-def select_overlap_sentences(sentences: list[str], budget: int = 100) -> list[str]:
+def select_overlap_sentences(
+    sentences: list[str],
+    budget: int = 100,
+    vectorizer: TfidfVectorizer | None = None,
+) -> list[str]:
     """Pick the most informative sentences for chunk overlap.
+
     Scores sentences by TF-IDF vector L2 norm (information density).
     Returns highest-scoring sentences within word budget, in original order.
+
+    Uses the corpus-level vectorizer (if provided) so that density
+    scores are comparable across the pipeline. Falls back to a local
+    vectorizer when called standalone.
     """
     if not sentences:
         return []
-    vec = TfidfVectorizer(stop_words="english")
-    try:
-        matrix = vec.fit_transform(sentences)
-    except ValueError:
-        return sentences[:1]
+    if vectorizer is not None:
+        try:
+            matrix = vectorizer.transform(sentences)
+        except Exception:
+            return sentences[:1]
+    else:
+        vec = TfidfVectorizer(stop_words="english")
+        try:
+            matrix = vec.fit_transform(sentences)
+        except ValueError:
+            return sentences[:1]
     scores = np.array(matrix.power(2).sum(axis=1)).flatten()
     ranked = sorted(enumerate(scores), key=lambda x: -x[1])
     selected_indices = []
