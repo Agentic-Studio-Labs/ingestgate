@@ -17,15 +17,23 @@ Supports DOCX, PDF, TXT, and Markdown. Works with any vector database (Pinecone,
 
 ```mermaid
 flowchart TD
-    Input[/"DOCX · PDF · MD · TXT"/] --> Parse["Parse"]
-    Parse --> CA["Corpus Analyzer\nTF-IDF · entropy · coherence · similarity"]
-    CA --> Score["Score\n10 criteria incl. retrieval-aware"]
-    Score -->|+ analyze| Analyze["LLM Analyze\nentities · relationships · knowledge graph"]
-    Score -->|+ fix| Fix["Auto-Fix\nrewrite refs · split paragraphs · headings"]
-    Analyze --> Recommend["Recommend Folders\nLouvain clusters · PageRank"]
+    Input[DOCX · PDF · MD · TXT]
+    Parse[Parse]
+    CA[Corpus Analyzer — TF-IDF · entropy · coherence · similarity]
+    Score[Score — 10 criteria incl. retrieval-aware]
+    Analyze[LLM Analyze — entities · relationships · knowledge graph]
+    Fix[Auto-Fix — rewrite refs · split paragraphs · headings]
+    Recommend[Recommend Folders — Louvain clusters · PageRank]
+    Output[Fixed Markdown]
+    Upload[Upload — anam.ai or any vector DB]
+
+    Input --> Parse --> CA --> Score
+    Score -->|+ analyze| Analyze
+    Score -->|+ fix| Fix
+    Analyze --> Recommend
     Analyze --> Fix
-    Fix --> Output[/"Fixed Markdown"/]
-    Recommend --> Upload[/"Upload · anam.ai or any vector DB"/]
+    Fix --> Output
+    Recommend --> Upload
     Output --> Upload
 ```
 
