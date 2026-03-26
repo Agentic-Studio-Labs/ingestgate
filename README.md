@@ -16,26 +16,29 @@ Supports DOCX, PDF, TXT, and Markdown. Works with any vector database (Pinecone,
 ### Pipeline
 
 ```mermaid
-flowchart LR
-    Input["📄 DOCX / PDF / MD / TXT"] --> Parse
-    Parse --> CA["Corpus Analyzer<br/><small>TF-IDF matrix<br/>entropy, coherence<br/>similarity</small>"]
-    CA --> Score["Score<br/><small>10 criteria incl.<br/>retrieval-aware</small>"]
-    Score --> Analyze["LLM Analyze<br/><small>entities, relationships<br/>knowledge graph</small>"]
-    Score --> Fix["Auto-Fix<br/><small>rewrite refs, split<br/>paragraphs, headings</small>"]
-    Analyze --> Recommend["Recommend<br/><small>folder structure<br/>Louvain clusters</small>"]
+flowchart TD
+    Input["📄 DOCX / PDF / MD / TXT"] --> Parse["Parse"]
+    Parse --> CA["Corpus Analyzer\nTF-IDF matrix, entropy, coherence, similarity"]
+    CA --> Score["Score\n10 criteria incl. retrieval-aware"]
+    Score -->|analyze| Analyze["LLM Analyze\nentities, relationships, knowledge graph"]
+    Score -->|fix| Fix["Auto-Fix\nrewrite refs, split paragraphs, headings"]
+    Analyze --> Recommend["Recommend Folders\nLouvain clusters + PageRank"]
     Analyze --> Fix
-    Fix --> Output["📁 Fixed Markdown<br/><small>rag-files-{timestamp}/</small>"]
-    Recommend --> Upload["Upload<br/><small>anam.ai or<br/>any vector DB</small>"]
+    Fix --> Output["📁 Fixed Markdown"]
+    Recommend --> Upload["Upload to anam.ai\nor any vector DB"]
     Output --> Upload
 
-    style Input fill:#f9f,stroke:#333
-    style Output fill:#9f9,stroke:#333
-    style Upload fill:#9cf,stroke:#333
-    style CA fill:#ffd,stroke:#333
-    style Score fill:#ffd,stroke:#333
+    style Input fill:#e8daef,stroke:#333
+    style Output fill:#d5f5e3,stroke:#333
+    style Upload fill:#d4e6f1,stroke:#333
 ```
 
-`score` runs Parse → Corpus Analyzer → Score. `analyze` adds LLM analysis and folder recommendations. `fix` adds auto-fix and writes improved Markdown. `upload` adds anam.ai folder creation and file upload.
+| Command | What runs |
+|---------|-----------|
+| `score` | Parse → Corpus Analyzer → Score |
+| `analyze` | + LLM analysis, knowledge graph, folder recommendations |
+| `fix` | + auto-fix, writes improved Markdown to output directory |
+| `upload` | + anam.ai folder creation and file upload |
 
 ### Why retrieval-aware scoring?
 
