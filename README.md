@@ -283,15 +283,13 @@ Each document gets a `.meta.json` file written next to its output:
 
 ```
 output/
-├── Insurance Concepts/
-│   ├── insurance-types.md
-│   ├── insurance-types.meta.json     ← analysis sidecar
-│   └── insurance-types.chunks.json   ← chunk sidecar
-├── Goal Setting/
-│   ├── smart-goals.md
-│   ├── smart-goals.meta.json
-│   └── smart-goals.chunks.json
-└── manifest.json                      ← corpus manifest
+├── insurance-types.md
+├── insurance-types.meta.json     ← analysis sidecar
+├── insurance-types.chunks.json   ← chunk sidecar
+├── smart-goals.md
+├── smart-goals.meta.json
+├── smart-goals.chunks.json
+└── manifest.json                 ← corpus manifest
 ```
 
 Each `.meta.json` sidecar contains the document's analysis, scores, metrics, entities, relationships, and a `retrieval_quality_gate` block with deterministic retrieval-mode hints, modality readiness flags, and evidence. Each `.chunks.json` sidecar contains the heading-aware chunks with metadata.
@@ -349,8 +347,11 @@ A single `manifest.json` at the output root contains corpus-level stats (includi
 # fix writes sidecars + manifest by default
 python -m src.cli fix ./my-docs/ --llm-key $KEY
 
-# analyze writes to .ragprep/ subdirectory
+# analyze writes metadata to ./my-docs/.ragprep/ (directory input expected)
 python -m src.cli analyze ./my-docs/ --llm-key $KEY
+
+# for focused analysis, use --exclude to narrow the set within a directory
+python -m src.cli analyze ./my-docs/ --llm-key $KEY --exclude "draft"
 
 # pipe manifest to jq
 python -m src.cli analyze ./my-docs/ --llm-key $KEY --json-output | jq .corpus
