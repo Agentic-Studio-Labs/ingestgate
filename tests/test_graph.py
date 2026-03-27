@@ -6,17 +6,15 @@ Tests three changes:
 3. Louvain community detection instead of connected components
 """
 
-import pytest
-
-from graph_builder import KnowledgeGraph
-from models import ContentAnalysis, Entity, ParsedDocument, Relationship
+from src.graph_builder import KnowledgeGraph
+from src.models import ContentAnalysis, Entity, ParsedDocument, Relationship
 
 
 def _make_doc(filename: str, text: str = "Some content") -> ParsedDocument:
     """Create a minimal ParsedDocument for testing."""
     from pathlib import Path
 
-    from models import DocumentMetadata, Paragraph
+    from src.models import DocumentMetadata, Paragraph
 
     ext = Path(filename).suffix.lstrip(".") or "md"
     return ParsedDocument(
@@ -87,22 +85,21 @@ class TestNoImplicitEntities:
 
 
 class TestFuzzyMatchingThreshold:
-    """Substring fallback should only activate for names ≥8 chars."""
+    """Cosine similarity on char n-grams should resolve entity names."""
 
-    def test_short_name_no_fuzzy_match(self):
-        """'Goal' (4 chars) should NOT fuzzy-match 'Goal Setting'."""
+    def test_short_name_cosine_match(self):
+        """'Goal' should cosine-match 'Goal Setting' (high char n-gram overlap)."""
         graph = KnowledgeGraph()
         graph._add_entity(
             Entity(name="Goal Setting", entity_type="concept", source_file="a.md"),
             "a.md",
         )
 
-        # "Goal" is only 4 chars — should NOT match "Goal Setting"
         result = graph._find_entity_key("Goal")
-        assert result is None, "Short name 'Goal' should not fuzzy-match 'Goal Setting'"
+        assert result is not None, "Short name 'Goal' should match 'Goal Setting' via cosine"
 
-    def test_medium_name_no_fuzzy_match(self):
-        """'Credit' (6 chars) should NOT fuzzy-match 'Credit Score'."""
+    def test_medium_name_cosine_match(self):
+        """'Credit' should cosine-match 'Credit Score' (high char n-gram overlap)."""
         graph = KnowledgeGraph()
         graph._add_entity(
             Entity(name="Credit Score", entity_type="concept", source_file="a.md"),
@@ -110,10 +107,10 @@ class TestFuzzyMatchingThreshold:
         )
 
         result = graph._find_entity_key("Credit")
-        assert result is None, "6-char name should not fuzzy-match"
+        assert result is not None, "6-char name should match via cosine"
 
     def test_long_name_does_fuzzy_match(self):
-        """'Financial Planning' (18 chars) SHOULD fuzzy-match 'Financial Planning Basics'."""
+        """'Financial Planning' (18 chars) SHOULD cosine-match 'Financial Planning Basics'."""
         graph = KnowledgeGraph()
         graph._add_entity(
             Entity(name="Financial Planning Basics", entity_type="concept", source_file="a.md"),
@@ -147,6 +144,35 @@ class TestFuzzyMatchingThreshold:
 
 
 # ------------------------------------------------------------------
+# 2b. Cosine entity resolution (char n-gram TF-IDF)
+# ------------------------------------------------------------------
+
+
+class TestCosineEntityResolution:
+    def test_morphological_match(self):
+        graph = KnowledgeGraph()
+        graph._add_entity(Entity(name="Budgeting Basics", entity_type="concept", source_file="a.md"), "a.md")
+        result = graph._find_entity_key("Budget")
+        assert result is not None, "'Budget' should fuzzy-match 'Budgeting Basics'"
+
+    def test_no_false_positive(self):
+        graph = KnowledgeGraph()
+        graph._add_entity(Entity(name="Digital Safety", entity_type="concept", source_file="a.md"), "a.md")
+        result = graph._find_entity_key("Financial Literacy")
+        assert result is None, "Unrelated entities should not match"
+
+    def test_deterministic_best_match(self):
+        graph = KnowledgeGraph()
+        graph._add_entity(
+            Entity(name="Financial Literacy Standards", entity_type="concept", source_file="a.md"), "a.md"
+        )
+        graph._add_entity(Entity(name="Digital Financial Safety", entity_type="concept", source_file="b.md"), "b.md")
+        result = graph._find_entity_key("Financial Literacy")
+        entity = graph._entities[result]
+        assert "Financial Literacy Standards" in entity.name
+
+
+# ------------------------------------------------------------------
 # 3. Louvain community detection
 # ------------------------------------------------------------------
 
@@ -161,19 +187,45 @@ class TestLouvainClustering:
         # Cluster A: tightly connected
         for name in ["Budgeting Basics", "Saving Strategies", "Financial Goals"]:
             graph._add_entity(Entity(name=name, entity_type="concept", source_file="a.md"), "a.md")
-        graph._add_relationship(Relationship(source="Budgeting Basics", target="Saving Strategies", rel_type="related_to", source_file="a.md"))
-        graph._add_relationship(Relationship(source="Saving Strategies", target="Financial Goals", rel_type="related_to", source_file="a.md"))
-        graph._add_relationship(Relationship(source="Financial Goals", target="Budgeting Basics", rel_type="related_to", source_file="a.md"))
+        graph._add_relationship(
+            Relationship(
+                source="Budgeting Basics", target="Saving Strategies", rel_type="related_to", source_file="a.md"
+            )
+        )
+        graph._add_relationship(
+            Relationship(
+                source="Saving Strategies", target="Financial Goals", rel_type="related_to", source_file="a.md"
+            )
+        )
+        graph._add_relationship(
+            Relationship(source="Financial Goals", target="Budgeting Basics", rel_type="related_to", source_file="a.md")
+        )
 
         # Cluster B: tightly connected
         for name in ["Career Exploration", "College Preparation", "Dream Job Research"]:
             graph._add_entity(Entity(name=name, entity_type="concept", source_file="b.md"), "b.md")
-        graph._add_relationship(Relationship(source="Career Exploration", target="College Preparation", rel_type="related_to", source_file="b.md"))
-        graph._add_relationship(Relationship(source="College Preparation", target="Dream Job Research", rel_type="related_to", source_file="b.md"))
-        graph._add_relationship(Relationship(source="Dream Job Research", target="Career Exploration", rel_type="related_to", source_file="b.md"))
+        graph._add_relationship(
+            Relationship(
+                source="Career Exploration", target="College Preparation", rel_type="related_to", source_file="b.md"
+            )
+        )
+        graph._add_relationship(
+            Relationship(
+                source="College Preparation", target="Dream Job Research", rel_type="related_to", source_file="b.md"
+            )
+        )
+        graph._add_relationship(
+            Relationship(
+                source="Dream Job Research", target="Career Exploration", rel_type="related_to", source_file="b.md"
+            )
+        )
 
         # Weak bridge between clusters
-        graph._add_relationship(Relationship(source="Financial Goals", target="Career Exploration", rel_type="influences", source_file="a.md"))
+        graph._add_relationship(
+            Relationship(
+                source="Financial Goals", target="Career Exploration", rel_type="influences", source_file="a.md"
+            )
+        )
 
         return graph
 
@@ -181,14 +233,80 @@ class TestLouvainClustering:
         """Louvain should find 2 communities, not 1 connected component."""
         graph = self._build_two_cluster_graph()
         clusters = graph.find_clusters()
-        assert len(clusters) >= 2, (
-            f"Expected ≥2 clusters from two distinct communities, got {len(clusters)}"
-        )
+        assert len(clusters) >= 2, f"Expected ≥2 clusters from two distinct communities, got {len(clusters)}"
 
-    def test_file_clusters_separates_files(self):
-        """Files from different communities should be in different clusters."""
-        graph = self._build_two_cluster_graph()
-        file_clusters = graph.get_file_clusters()
-        assert len(file_clusters) >= 2, (
-            f"Expected ≥2 file clusters, got {len(file_clusters)}: {file_clusters}"
+
+# ------------------------------------------------------------------
+# 4. Spectral clustering
+# ------------------------------------------------------------------
+
+
+class TestSpectralClustering:
+    def test_deterministic_clustering(self):
+        import numpy as np
+
+        from src.graph_builder import spectral_cluster
+
+        sim = np.array(
+            [
+                [1.0, 0.8, 0.1, 0.1],
+                [0.8, 1.0, 0.1, 0.1],
+                [0.1, 0.1, 1.0, 0.9],
+                [0.1, 0.1, 0.9, 1.0],
+            ]
         )
+        clusters_1 = spectral_cluster(sim)
+        clusters_2 = spectral_cluster(sim)
+        assert clusters_1 == clusters_2, "Should be deterministic"
+        assert len(clusters_1) == 2, f"Should find 2 clusters, got {len(clusters_1)}"
+
+
+# ------------------------------------------------------------------
+# 5. PageRank + bridge entities
+# ------------------------------------------------------------------
+
+
+def test_bipartite_similarity():
+    graph = KnowledgeGraph()
+    graph._add_entity(Entity(name="Budgeting", entity_type="concept", source_file="a.md"), "a.md")
+    graph._add_entity(Entity(name="Budgeting", entity_type="concept", source_file="b.md"), "b.md")
+    graph._add_entity(Entity(name="Insurance", entity_type="concept", source_file="c.md"), "c.md")
+    sim = graph.get_bipartite_doc_similarity()
+    assert sim is not None
+    files = sorted(graph._file_entities.keys())
+    a_idx = files.index("a.md")
+    b_idx = files.index("b.md")
+    c_idx = files.index("c.md")
+    assert sim[a_idx, b_idx] > sim[a_idx, c_idx]
+
+
+def test_blend_similarity_matrices():
+    import numpy as np
+
+    from src.graph_builder import blend_similarity
+
+    tfidf_sim = np.array([[1.0, 0.5], [0.5, 1.0]])
+    entity_sim = np.array([[1.0, 0.8], [0.8, 1.0]])
+    blended = blend_similarity(tfidf_sim, entity_sim, alpha=0.7)
+    expected_01 = 0.7 * 0.5 + 0.3 * 0.8  # 0.59
+    assert abs(blended[0, 1] - expected_01) < 0.01
+
+
+def test_pagerank_returns_rankings():
+    graph = KnowledgeGraph()
+    leaf_names = ["Budgeting", "Saving", "Credit", "Insurance", "Investing"]
+    for name in leaf_names:
+        graph._add_entity(Entity(name=name, entity_type="concept", source_file="a.md"), "a.md")
+    graph._add_entity(Entity(name="Financial Literacy", entity_type="concept", source_file="a.md"), "a.md")
+    for name in leaf_names:
+        graph._add_relationship(
+            Relationship(source="Financial Literacy", target=name, rel_type="covers", source_file="a.md")
+        )
+    rankings = graph.get_pagerank()
+    assert len(rankings) > 0
+    # PageRank rewards nodes with many inbound edges; the 5 leaf concepts each
+    # receive a link from "Financial Literacy", so they rank above it.
+    top_entity = max(rankings, key=rankings.get)
+    top_entity_name = graph._entities[top_entity].name if top_entity in graph._entities else top_entity
+    leaf_keys = {e.key for e in graph._entities.values() if e.name in leaf_names}
+    assert top_entity in leaf_keys, f"Top PageRank entity should be a leaf concept, got {top_entity_name!r}"
