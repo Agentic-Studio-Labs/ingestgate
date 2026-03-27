@@ -1,6 +1,8 @@
-# IngestGate Manifest Deep Dive
+# IngestGate Manifest Reference
 
-This guide explains how to interpret `.ingestgate/manifest.json` and convert IngestGate signals into concrete next actions.
+This is the field-level reference for `.ingestgate/manifest.json`.
+
+For operational sequencing and decision policy, start with `docs/sops/ingestion-operations.md`, then use this guide to drill into specific fields and evidence.
 
 ## Quick Triage Order
 

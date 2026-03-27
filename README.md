@@ -422,7 +422,7 @@ In practice, operators usually read it in this order:
 2. `benchmarks` for findability evidence
 3. `documents[*].retrieval_quality_gate` for per-document handling decisions
 
-Need deeper interpretation guidance? See [`docs/manifest-deep-dive.md`](docs/manifest-deep-dive.md) for field-by-field walkthrough, action mapping, and `jq` triage snippets. For a complete ingestion example, see [`docs/guides/weaviate-ingestion.md`](docs/guides/weaviate-ingestion.md).
+For day-to-day operations, follow the SOP in [`docs/sops/ingestion-operations.md`](docs/sops/ingestion-operations.md). Use [`docs/manifest-deep-dive.md`](docs/manifest-deep-dive.md) as the field-level reference companion, and [`docs/guides/weaviate-ingestion.md`](docs/guides/weaviate-ingestion.md) for end-to-end ingestion wiring.
 
 ### Usage
 
